@@ -1,0 +1,59 @@
+[tool.ruff]
+preview = true
+line-length = 120
+fix = true
+output-format = "grouped"
+
+[tool.ruff.format]
+exclude = [".git", ".venv", ".mypy_cache", ".tox", "__pycache__"]
+
+[tool.ruff.lint.isort]
+order-by-type = true
+
+[project]
+name = "openshift-virtualization-tests-quarantine-tools"
+requires-python = ">=3.12"
+version = "0.1.0"
+description = "Test quarantine management tools for OpenShift Virtualization"
+authors = [{ name = "Ruth Netser" }]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+dependencies = [
+    "jira>=3.8.0",
+    "pyhelper-utils>=1.0.1",
+    "python-simple-logger>=2.0.13",
+    "requests>=2.32.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.9.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+quarantine-dashboard = "quarantine_tools.dashboard:main"
+flaky-test-analyzer = "quarantine_tools.analyzer:main"
+quarantine-helper = "quarantine_tools.helper:main"
+quarantine-metrics = "quarantine_tools.metrics:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["quarantine_tools"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["quarantine_tools"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true

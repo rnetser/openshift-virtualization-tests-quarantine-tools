@@ -1,0 +1,185 @@
+name: Quarantine Recommender
+
+on:
+  schedule:
+    # Run on weekdays at 8 AM UTC
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Minimum failure count to flag as flaky'
+        required: false
+        default: '5'
+        type: string
+      days:
+        description: 'Number of days to analyze'
+        required: false
+        default: '7'
+        type: string
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  analyze-flaky-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Validate inputs
+        env:
+          INPUT_THRESHOLD: ${{ github.event.inputs.threshold || '5' }}
+          INPUT_DAYS: ${{ github.event.inputs.days || '7' }}
+        run: |
+          if ! [[ "$INPUT_THRESHOLD" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid threshold: must be a positive integer"
+            exit 1
+          fi
+          if ! [[ "$INPUT_DAYS" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid days: must be a positive integer"
+            exit 1
+          fi
+
+      - name: Run flaky test analyzer
+        id: analyze
+        env:
+          REPORTPORTAL_URL: ${{ secrets.REPORTPORTAL_URL }}
+          REPORTPORTAL_TOKEN: ${{ secrets.REPORTPORTAL_TOKEN }}
+          REPORTPORTAL_PROJECT: ${{ secrets.REPORTPORTAL_PROJECT }}
+          INPUT_THRESHOLD: ${{ github.event.inputs.threshold || '5' }}
+          INPUT_DAYS: ${{ github.event.inputs.days || '7' }}
+        run: |
+          uv run flaky-test-analyzer \
+            --threshold "$INPUT_THRESHOLD" \
+            --days "$INPUT_DAYS" \
+            --branch main \
+            --output json \
+            --check-quarantined > /tmp/flaky_report.json 2>/dev/null || true
+
+          # Check if report has candidates
+          if [ -f /tmp/flaky_report.json ] && [ -s /tmp/flaky_report.json ]; then
+            CANDIDATE_COUNT=$(uv run python3 -c "
+          import json
+          with open('/tmp/flaky_report.json') as f:
+              data = json.load(f)
+          candidates = data.get('cross_reference', {}).get('quarantine_candidates', [])
+          print(len(candidates))
+          " 2>/dev/null || echo "0")
+            echo "candidate_count=$CANDIDATE_COUNT" >> "$GITHUB_OUTPUT"
+            echo "has_candidates=$( [ "$CANDIDATE_COUNT" -gt 0 ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          else
+            echo "candidate_count=0" >> "$GITHUB_OUTPUT"
+            echo "has_candidates=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check for existing open issue
+        if: steps.analyze.outputs.has_candidates == 'true'
+        id: check_issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING=$(gh issue list --label "quarantine-candidate" --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "existing_issue=$EXISTING" >> "$GITHUB_OUTPUT"
+            echo "should_create=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_create=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate issue body
+        if: steps.analyze.outputs.has_candidates == 'true' && steps.check_issue.outputs.should_create == 'true'
+        id: issue_body
+        run: |
+          uv run python3 << 'PYEOF'
+          import json
+          import os
+          from datetime import datetime, timezone
+
+          with open("/tmp/flaky_report.json") as f:
+              data = json.load(f)
+
+          candidates = data.get("cross_reference", {}).get("quarantine_candidates", [])
+          if not candidates:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as gh_output:
+                  gh_output.write("body=No candidates found\n")
+              exit(0)
+
+          body_lines = [
+              f"## Quarantine Candidates — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+              "",
+              f"The flaky test analyzer found **{len(candidates)}** test(s) that may need quarantining.",
+              "",
+              "### Candidates",
+              "",
+              "| Test | Failures | Rate | Team |",
+              "|------|----------|------|------|",
+          ]
+
+          for candidate in candidates:
+              name = candidate.get("test_name", "unknown")
+              failures = candidate.get("failure_count", 0)
+              rate = candidate.get("failure_rate", 0)
+              rate_pct = f"{rate:.0%}" if isinstance(rate, float) else str(rate)
+              body_lines.append(f"| `{name}` | {failures} | {rate_pct} | — |")
+
+          body_lines.extend([
+              "",
+              "### Quarantine Checklist",
+              "",
+              "For each candidate, verify before quarantining:",
+              "",
+              "- [ ] Confirmed the test is genuinely flaky (not a real regression)",
+              "- [ ] Created a Jira ticket with label `quarantined-test`",
+              "- [ ] Applied `@pytest.mark.xfail(reason=f\"{QUARANTINED}: <reason>, <jira>\", run=False)`",
+              "- [ ] Notified the owning team",
+              "",
+              "### How to quarantine",
+              "",
+              "```bash",
+              "uv run quarantine-helper apply <test_path> --jira CNV-XXXXX --reason 'description'",
+              "```",
+              "",
+              f"*Generated by quarantine-recommender workflow on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*",
+          ])
+
+          body = "\n".join(body_lines)
+
+          # Write body to a file to avoid shell escaping issues
+          with open("/tmp/issue_body.md", "w") as f:
+              f.write(body)
+
+          PYEOF
+
+      - name: Create GitHub issue
+        if: steps.analyze.outputs.has_candidates == 'true' && steps.check_issue.outputs.should_create == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_COUNT: ${{ steps.analyze.outputs.candidate_count }}
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+
+          gh issue create \
+            --title "Quarantine candidates: ${CANDIDATE_COUNT} flaky test(s) detected — ${DATE}" \
+            --body-file /tmp/issue_body.md \
+            --label "quarantine-candidate"
+
+      - name: Update existing issue
+        if: steps.analyze.outputs.has_candidates == 'true' && steps.check_issue.outputs.should_create == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXISTING_ISSUE: ${{ steps.check_issue.outputs.existing_issue }}
+        run: |
+          gh issue comment "$EXISTING_ISSUE" --body-file /tmp/issue_body.md

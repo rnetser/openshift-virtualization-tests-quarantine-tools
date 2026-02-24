@@ -1,0 +1,191 @@
+name: Quarantine Biweekly Review
+
+on:
+  schedule:
+    # Run on 1st and 15th of each month at 9 AM UTC
+    - cron: '0 9 1,15 * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  quarantine-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for quarantine age calculation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Generate quarantine dashboard
+        run: |
+          uv run quarantine-dashboard \
+            --local \
+            --json > /tmp/quarantine_dashboard.json 2>/dev/null || true
+
+      - name: Run flaky test analyzer for de-quarantine candidates
+        env:
+          REPORTPORTAL_URL: ${{ secrets.REPORTPORTAL_URL }}
+          REPORTPORTAL_TOKEN: ${{ secrets.REPORTPORTAL_TOKEN }}
+          REPORTPORTAL_PROJECT: ${{ secrets.REPORTPORTAL_PROJECT }}
+        run: |
+          uv run flaky-test-analyzer \
+            --threshold 3 \
+            --days 14 \
+            --branch main \
+            --output json \
+            --check-quarantined > /tmp/flaky_report.json 2>/dev/null || true
+
+      - name: Generate review issue body
+        id: review
+        run: |
+          python3 << 'PYEOF'
+          import json
+          import os
+          from datetime import datetime, timezone
+
+          now = datetime.now(timezone.utc)
+          date_str = now.strftime("%Y-%m-%d")
+
+          # Load dashboard data
+          dashboard = {}
+          try:
+              with open("/tmp/quarantine_dashboard.json") as f:
+                  dashboard = json.load(f)
+          except (FileNotFoundError, json.JSONDecodeError):
+              pass
+
+          # Load flaky report
+          flaky_report = {}
+          try:
+              with open("/tmp/flaky_report.json") as f:
+                  flaky_report = json.load(f)
+          except (FileNotFoundError, json.JSONDecodeError):
+              pass
+
+          body_lines = [
+              f"## Quarantine Biweekly Review — {date_str}",
+              "",
+          ]
+
+          # Summary section
+          versions = dashboard.get("versions", {})
+          if versions:
+              main_data = versions.get("main", {})
+              total = main_data.get("total_tests", 0)
+              quarantined = main_data.get("quarantined_tests", 0)
+              body_lines.extend([
+                  "### Summary (main branch)",
+                  "",
+                  f"- **Total tests:** {total}",
+                  f"- **Quarantined tests:** {quarantined}",
+                  f"- **Health:** {((total - quarantined) / total * 100) if total > 0 else 0:.1f}%",
+                  "",
+              ])
+
+              # Team breakdown
+              teams = main_data.get("teams", {})
+              if teams:
+                  body_lines.extend([
+                      "### Per-Team Breakdown",
+                      "",
+                      "| Team | Total | Quarantined | Health % |",
+                      "|------|-------|-------------|----------|",
+                  ])
+                  for team_name, team_data in sorted(teams.items()):
+                      t_total = team_data.get("total", 0)
+                      t_quarantined = team_data.get("quarantined", 0)
+                      t_health = ((t_total - t_quarantined) / t_total * 100) if t_total > 0 else 0
+                      body_lines.append(f"| {team_name} | {t_total} | {t_quarantined} | {t_health:.1f}% |")
+                  body_lines.append("")
+
+          # SLA breaches (quarantined > 30 days)
+          quarantined_list = []
+          if versions:
+              for version_data in versions.values():
+                  for test in version_data.get("quarantined_tests_list", []):
+                      quarantined_list.append(test)
+
+          sla_breaches = [t for t in quarantined_list if t.get("quarantine_age_days", 0) > 30]
+          if sla_breaches:
+              body_lines.extend([
+                  "### :warning: SLA Breaches (Quarantined > 30 Days)",
+                  "",
+                  "| Test | Age (days) | Jira | Team |",
+                  "|------|------------|------|------|",
+              ])
+              for test in sorted(sla_breaches, key=lambda x: x.get("quarantine_age_days", 0), reverse=True):
+                  name = test.get("name", "unknown")
+                  age = test.get("quarantine_age_days", 0)
+                  jira = test.get("jira_ticket", "—")
+                  team = test.get("category", "—")
+                  jira_link = f"[{jira}](https://issues.redhat.com/browse/{jira})" if jira and jira != "—" else "—"
+                  body_lines.append(f"| `{name}` | {age} | {jira_link} | {team} |")
+              body_lines.append("")
+
+          # De-quarantine candidates
+          cross_ref = flaky_report.get("cross_reference", {})
+          dequarantine = cross_ref.get("dequarantine_candidates", [])
+          if dequarantine:
+              body_lines.extend([
+                  "### :white_check_mark: De-Quarantine Candidates (Passing Consistently)",
+                  "",
+                  "These quarantined tests appear to be passing now and may be ready for de-quarantine:",
+                  "",
+              ])
+              for test_name in dequarantine:
+                  body_lines.append(f"- `{test_name}`")
+              body_lines.append("")
+
+          # Action items
+          body_lines.extend([
+              "### Action Items",
+              "",
+              "- [ ] Review SLA breaches — escalate or extend deadline",
+              "- [ ] Verify de-quarantine candidates — remove xfail if stable",
+              "- [ ] Check resolved Jira tickets — de-quarantine fixed tests",
+              "- [ ] Update team dashboards",
+              "",
+              "### How to de-quarantine",
+              "",
+              "```bash",
+              "uv run quarantine-helper remove <test_path>::<test_name>",
+              "```",
+              "",
+              f"*Generated by quarantine-review workflow on {now.strftime('%Y-%m-%d %H:%M UTC')}*",
+          ])
+
+          body = "\n".join(body_lines)
+          with open("/tmp/review_body.md", "w") as f:
+              f.write(body)
+
+          # Check if there's content worth reporting
+          has_content = bool(sla_breaches or dequarantine or versions)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as gh_output:
+              gh_output.write(f"has_content={'true' if has_content else 'false'}\n")
+
+          PYEOF
+
+      - name: Create review issue
+        if: steps.review.outputs.has_content == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          gh issue create \
+            --title "Quarantine biweekly review — ${DATE}" \
+            --body-file /tmp/review_body.md \
+            --label "quarantine-review"
