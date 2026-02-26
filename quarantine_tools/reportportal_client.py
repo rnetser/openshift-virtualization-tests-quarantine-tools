@@ -332,23 +332,65 @@ class ReportPortalClient:
         }
         if branch:
             params["filter.has.compositeAttribute"] = f"branch:{branch}"
+            LOGGER.info("Filtering launches by branch attribute: branch:%s", branch)
+
+        LOGGER.info("Launch query params: %s", params)
+        LOGGER.debug("Full API URL: %s/%s", self._base_url, "launch")
 
         all_launch_ids: list[str] = []
-        page = 1
+        current_page = 1
 
         while True:
-            params["page.page"] = page
+            params["page.page"] = current_page
+            LOGGER.debug("Request params: %s", params)
             response_data = self._make_request(method="GET", endpoint="launch", params=params)
             launches = response_data.get("content", [])
+
+            LOGGER.debug(
+                "Response page %d: %d launches, total elements: %s",
+                current_page,
+                len(launches),
+                response_data.get("page", {}).get("totalElements", "unknown"),
+            )
+
+            if launches and current_page == 1:
+                # Log first 3 launch attributes for debugging
+                for launch in launches[:3]:
+                    launch_name = launch.get("name", "unknown")
+                    launch_attrs = launch.get("attributes", [])
+                    LOGGER.info("Sample launch '%s' attributes: %s", launch_name, launch_attrs)
+
             all_launch_ids.extend(str(launch["id"]) for launch in launches)
 
             page_info = response_data.get("page", {})
             total_pages = page_info.get("totalPages", 1)
-            if page >= total_pages:
+            if current_page >= total_pages:
                 break
-            page += 1
+            current_page += 1
 
         LOGGER.info(f"Found {len(all_launch_ids)} launches since {since_date}")
+
+        # Diagnostic fallback: if branch filter returned 0 results, query without it to compare
+        if not all_launch_ids and branch:
+            LOGGER.warning(
+                "No launches found with branch filter 'branch:%s'. Trying without filter to diagnose...",
+                branch,
+            )
+            debug_params = {key: value for key, value in params.items() if "Attribute" not in key}
+            debug_response = self._make_request(
+                method="GET", endpoint="launch", params={**debug_params, "page.size": "5"}
+            )
+            debug_launches = debug_response.get("content", [])
+            total_without_filter = debug_response.get("page", {}).get("totalElements", 0)
+            LOGGER.warning("Without branch filter: %d total launches found", total_without_filter)
+            for debug_launch in debug_launches[:3]:
+                LOGGER.warning(
+                    "  Launch '%s' (id=%s) attributes: %s",
+                    debug_launch.get("name", "?"),
+                    debug_launch.get("id", "?"),
+                    debug_launch.get("attributes", []),
+                )
+
         return all_launch_ids
 
     def _get_launch_items(self, launch_id: str) -> list[dict[str, Any]]:

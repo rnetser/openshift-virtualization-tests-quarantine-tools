@@ -1039,6 +1039,12 @@ Examples:
         help="Path to local repository for scanning quarantined tests (default: current directory)",
     )
     parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Enable debug logging for troubleshooting API issues",
+    )
+    parser.add_argument(
         "--reportportal-url",
         type=str,
         default=None,
@@ -1095,6 +1101,11 @@ def run_analysis(*, args: Namespace) -> int:
         Exit code: 0 on success, 1 on error.
 
     """
+    if args.debug:
+        import logging
+        logging.getLogger("quarantine_tools").setLevel(logging.DEBUG)
+        LOGGER.debug("Debug logging enabled")
+
     repo_path = Path(args.repo_path).resolve()
 
     # Handle health check mode (independent workflow)
