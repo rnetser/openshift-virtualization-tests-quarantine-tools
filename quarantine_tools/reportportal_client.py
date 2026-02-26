@@ -331,7 +331,7 @@ class ReportPortalClient:
             "page.sort": "startTime,desc",
         }
         if branch:
-            params["filter.has.attributeValue"] = branch
+            params["filter.has.compositeAttribute"] = f"branch:{branch}"
 
         all_launch_ids: list[str] = []
         page = 1
@@ -429,7 +429,10 @@ def _extract_defect_type(item: dict[str, Any]) -> str:
     statistics = item.get("statistics", {})
     defects = statistics.get("defects", {})
     for defect_type, count in defects.items():
-        if count > 0:
+        if isinstance(count, dict):
+            if count.get("total", 0) > 0:
+                return defect_type
+        elif isinstance(count, (int, float)) and count > 0:
             return defect_type
     return ""
 
@@ -450,9 +453,13 @@ def _parse_test_item(item: dict[str, Any], test_name: str) -> TestOutcome:
     start_time = _format_timestamp(timestamp=_parse_timestamp(timestamp=start_time_raw)) if start_time_raw else ""
     end_time = _format_timestamp(timestamp=_parse_timestamp(timestamp=end_time_raw)) if end_time_raw else ""
 
-    issue = item.get("issue", {})
-    defect_type = issue.get("issueType", _extract_defect_type(item=item))
-    message = issue.get("comment", item.get("description", ""))
+    issue = item.get("issue")
+    if isinstance(issue, dict):
+        defect_type = issue.get("issueType", "") or _extract_defect_type(item=item)
+        message = issue.get("comment", item.get("description", ""))
+    else:
+        defect_type = _extract_defect_type(item=item)
+        message = item.get("description", "")
 
     return TestOutcome(
         test_name=item.get("name", test_name),
