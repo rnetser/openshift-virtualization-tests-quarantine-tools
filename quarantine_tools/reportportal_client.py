@@ -111,8 +111,8 @@ class ReportPortalClient:
             token: API bearer token. Falls back to REPORTPORTAL_TOKEN env var.
             project: Project name in ReportPortal. Falls back to REPORTPORTAL_PROJECT env var.
             verify_ssl: Whether to verify SSL certificates. Falls back to
-                REPORTPORTAL_VERIFY_SSL env var (default: true). Set to False
-                for self-signed certificates, or pass a string path to a CA
+                REPORTPORTAL_VERIFY_SSL env var (default: false). Set to True
+                to enforce certificate verification, or pass a string path to a CA
                 bundle file for custom certificate authority verification.
 
         Raises:
@@ -130,16 +130,16 @@ class ReportPortalClient:
         })
 
         if verify_ssl is None:
-            ssl_env = environ.get(REPORTPORTAL_VERIFY_SSL_ENV, "true").lower()
+            ssl_env = environ.get(REPORTPORTAL_VERIFY_SSL_ENV, "false").lower()
             if ssl_env in ("false", "0", "no", "off", "disabled"):
                 verify_ssl = False
             elif ssl_env not in ("true", "1", "yes", "on", "enabled"):
                 LOGGER.warning(
-                    "Unrecognized REPORTPORTAL_VERIFY_SSL value '%s', defaulting to True. "
+                    "Unrecognized REPORTPORTAL_VERIFY_SSL value '%s', defaulting to False. "
                     "Valid values: true/1/yes/on/enabled or false/0/no/off/disabled",
                     ssl_env,
                 )
-                verify_ssl = True
+                verify_ssl = False
             else:
                 verify_ssl = True
 
@@ -560,7 +560,7 @@ def get_test_history(
         test_name: Fully qualified test name to query.
         days: Number of days to look back. Defaults to 7.
         verify_ssl: Whether to verify SSL certificates. Falls back to
-            REPORTPORTAL_VERIFY_SSL env var (default: true). Can also be
+            REPORTPORTAL_VERIFY_SSL env var (default: false). Can also be
             a string path to a CA bundle file.
 
     Returns:
@@ -589,7 +589,7 @@ def get_flaky_tests(
         days: Number of days to look back. Defaults to 7.
         branch: Optional branch name to filter launches by attribute.
         verify_ssl: Whether to verify SSL certificates. Falls back to
-            REPORTPORTAL_VERIFY_SSL env var (default: true). Can also be
+            REPORTPORTAL_VERIFY_SSL env var (default: false). Can also be
             a string path to a CA bundle file.
 
     Returns:
