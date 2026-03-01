@@ -14,6 +14,7 @@ from typing import Any, NamedTuple
 from requests import Session
 from requests.adapters import HTTPAdapter
 from simple_logger.logger import get_logger
+import urllib3
 from urllib3.util.retry import Retry
 
 from quarantine_tools.exceptions import MissingEnvironmentVariableError
@@ -23,6 +24,7 @@ LOGGER = get_logger(name=__name__)
 REPORTPORTAL_URL_ENV = "REPORTPORTAL_URL"
 REPORTPORTAL_TOKEN_ENV = "REPORTPORTAL_TOKEN"
 REPORTPORTAL_PROJECT_ENV = "REPORTPORTAL_PROJECT"
+REPORTPORTAL_VERIFY_SSL_ENV = "REPORTPORTAL_VERIFY_SSL"
 
 DEFAULT_PAGE_SIZE = 300
 
@@ -95,13 +97,23 @@ class ReportPortalClient:
     calculate failure rates using the ReportPortal v1 API.
     """
 
-    def __init__(self, url: str | None = None, token: str | None = None, project: str | None = None) -> None:
+    def __init__(
+        self,
+        url: str | None = None,
+        token: str | None = None,
+        project: str | None = None,
+        verify_ssl: bool | str | None = None,
+    ) -> None:
         """Initialize the client. Falls back to environment variables if params not provided.
 
         Args:
             url: ReportPortal server endpoint. Falls back to REPORTPORTAL_URL env var.
             token: API bearer token. Falls back to REPORTPORTAL_TOKEN env var.
             project: Project name in ReportPortal. Falls back to REPORTPORTAL_PROJECT env var.
+            verify_ssl: Whether to verify SSL certificates. Falls back to
+                REPORTPORTAL_VERIFY_SSL env var (default: true). Set to False
+                for self-signed certificates, or pass a string path to a CA
+                bundle file for custom certificate authority verification.
 
         Raises:
             MissingEnvironmentVariableError: If a required parameter is not provided
@@ -116,6 +128,28 @@ class ReportPortalClient:
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         })
+
+        if verify_ssl is None:
+            ssl_env = environ.get(REPORTPORTAL_VERIFY_SSL_ENV, "true").lower()
+            if ssl_env in ("false", "0", "no", "off", "disabled"):
+                verify_ssl = False
+            elif ssl_env not in ("true", "1", "yes", "on", "enabled"):
+                LOGGER.warning(
+                    "Unrecognized REPORTPORTAL_VERIFY_SSL value '%s', defaulting to True. "
+                    "Valid values: true/1/yes/on/enabled or false/0/no/off/disabled",
+                    ssl_env,
+                )
+                verify_ssl = True
+            else:
+                verify_ssl = True
+
+        self._session.verify = verify_ssl
+
+        if verify_ssl is False:
+            # Note: This suppresses InsecureRequestWarning globally for the entire process.
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            LOGGER.warning("SSL verification disabled for ReportPortal connection")
+
         retry_strategy = Retry(
             total=3,
             backoff_factor=1,
@@ -514,7 +548,9 @@ def _parse_test_item(item: dict[str, Any], test_name: str) -> TestOutcome:
     )
 
 
-def get_test_history(test_name: str, days: int = 7) -> list[TestOutcome]:
+def get_test_history(
+    test_name: str, days: int = 7, verify_ssl: bool | str | None = None
+) -> list[TestOutcome]:
     """Convenience function using env var configuration.
 
     Creates a ReportPortalClient from environment variables and retrieves
@@ -523,6 +559,9 @@ def get_test_history(test_name: str, days: int = 7) -> list[TestOutcome]:
     Args:
         test_name: Fully qualified test name to query.
         days: Number of days to look back. Defaults to 7.
+        verify_ssl: Whether to verify SSL certificates. Falls back to
+            REPORTPORTAL_VERIFY_SSL env var (default: true). Can also be
+            a string path to a CA bundle file.
 
     Returns:
         List of TestOutcome records, most recent first.
@@ -530,12 +569,15 @@ def get_test_history(test_name: str, days: int = 7) -> list[TestOutcome]:
     Raises:
         MissingEnvironmentVariableError: If required environment variables are not set.
     """
-    with ReportPortalClient() as client:
+    with ReportPortalClient(verify_ssl=verify_ssl) as client:
         return client.get_test_history(test_name=test_name, days=days)
 
 
 def get_flaky_tests(
-    threshold: int = 3, days: int = 7, branch: str | None = None
+    threshold: int = 3,
+    days: int = 7,
+    branch: str | None = None,
+    verify_ssl: bool | str | None = None,
 ) -> list[FlakyTestInfo]:
     """Convenience function using env var configuration.
 
@@ -546,6 +588,9 @@ def get_flaky_tests(
         threshold: Minimum number of failures to be considered flaky. Defaults to 3.
         days: Number of days to look back. Defaults to 7.
         branch: Optional branch name to filter launches by attribute.
+        verify_ssl: Whether to verify SSL certificates. Falls back to
+            REPORTPORTAL_VERIFY_SSL env var (default: true). Can also be
+            a string path to a CA bundle file.
 
     Returns:
         List of FlakyTestInfo sorted by failure_count descending.
@@ -553,5 +598,5 @@ def get_flaky_tests(
     Raises:
         MissingEnvironmentVariableError: If required environment variables are not set.
     """
-    with ReportPortalClient() as client:
+    with ReportPortalClient(verify_ssl=verify_ssl) as client:
         return client.get_flaky_tests(threshold=threshold, days=days, branch=branch)
