@@ -37,7 +37,13 @@ from typing import ClassVar, NamedTuple
 from pyhelper_utils.shell import run_command
 from simple_logger.logger import get_logger
 
-from quarantine_tools.reportportal_client import FlakyTestInfo, ReportPortalClient
+from quarantine_tools.reportportal_client import (
+    FlakyTestInfo,
+    ReportPortalClient,
+    REPORTPORTAL_PROJECT_ENV,
+    REPORTPORTAL_TOKEN_ENV,
+    REPORTPORTAL_URL_ENV,
+)
 
 LOGGER = get_logger(name=__name__)
 
@@ -94,18 +100,18 @@ def _create_reportportal_client(
         Configured ReportPortalClient instance, or None if configuration is incomplete.
 
     """
-    url = reportportal_url or environ.get("REPORTPORTAL_URL")
-    token = reportportal_token or environ.get("REPORTPORTAL_TOKEN")
-    project = reportportal_project or environ.get("REPORTPORTAL_PROJECT")
+    url = reportportal_url or environ.get(REPORTPORTAL_URL_ENV)
+    token = reportportal_token or environ.get(REPORTPORTAL_TOKEN_ENV)
+    project = reportportal_project or environ.get(REPORTPORTAL_PROJECT_ENV)
 
     if not url or not token or not project:
         missing: list[str] = []
         if not url:
-            missing.append("REPORTPORTAL_URL")
+            missing.append(REPORTPORTAL_URL_ENV)
         if not token:
-            missing.append("REPORTPORTAL_TOKEN")
+            missing.append(REPORTPORTAL_TOKEN_ENV)
         if not project:
-            missing.append("REPORTPORTAL_PROJECT")
+            missing.append(REPORTPORTAL_PROJECT_ENV)
         LOGGER.warning(
             "ReportPortal not configured. Missing: %s. "
             "Set environment variables or use --reportportal-* flags.",
@@ -639,6 +645,9 @@ def _build_flaky_lookup(client: ReportPortalClient, branch: str) -> dict[str, fl
         return None
 
     try:
+        # threshold=1: fetch ALL tests with any failure so we can enrich
+        # the dashboard with per-test failure rates. The --flaky-threshold
+        # CLI flag filters at display time in _calculate_stats().
         flaky_tests: list[FlakyTestInfo] = client.get_flaky_tests(
             threshold=1, days=30, launch_name_contains=branch,
         )
@@ -647,9 +656,10 @@ def _build_flaky_lookup(client: ReportPortalClient, branch: str) -> dict[str, fl
             short_name = info.test_name.split("::")[-1]
             if short_name in lookup:
                 lookup[short_name] = max(lookup[short_name], info.failure_rate)
-                LOGGER.debug(
-                    "Duplicate test name '%s' in flaky lookup; keeping higher failure rate",
+                LOGGER.warning(
+                    "Duplicate test name '%s' in flaky lookup (from '%s'); keeping higher failure rate",
                     short_name,
+                    info.test_name,
                 )
             else:
                 lookup[short_name] = info.failure_rate
@@ -660,7 +670,7 @@ def _build_flaky_lookup(client: ReportPortalClient, branch: str) -> dict[str, fl
         return lookup
     except Exception:
         LOGGER.warning(
-            "Failed to fetch flaky test data for branch '%s'",
+            "Failed to fetch flaky test data for branch '%s' (continuing without flaky data)",
             branch,
             exc_info=True,
         )
@@ -2310,6 +2320,7 @@ def run_multi_repo_mode(
 
     # Create ReportPortal client if enabled
     rp_client: ReportPortalClient | None = None
+    rp_data_available = False
     if with_reportportal:
         rp_client = _create_reportportal_client(
             reportportal_url=reportportal_url,
@@ -2317,6 +2328,7 @@ def run_multi_repo_mode(
             reportportal_project=reportportal_project,
         )
         if rp_client:
+            rp_data_available = True
             LOGGER.info("ReportPortal integration enabled (threshold=%.2f)", flaky_threshold)
         else:
             LOGGER.warning("ReportPortal requested but not configured — continuing without flaky data")
@@ -2379,7 +2391,7 @@ def run_multi_repo_mode(
         stats=primary_stats,
         branch=primary_branch,
         repo_stats=repo_stats,
-        with_reportportal=with_reportportal,
+        with_reportportal=rp_data_available,
     )
     dashboard_content = generator.generate()
 
@@ -2408,6 +2420,11 @@ def main() -> int:
 
     """
     args = parse_args()
+
+    # Validate flaky threshold range
+    if not 0.0 <= args.flaky_threshold <= 1.0:
+        LOGGER.error("--flaky-threshold must be between 0.0 and 1.0, got: %s", args.flaky_threshold)
+        raise SystemExit(1)
 
     # Resolve repositories: CLI --repo overrides built-in defaults
     repos = args.repos if args.repos else REPOS

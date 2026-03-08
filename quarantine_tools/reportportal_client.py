@@ -135,19 +135,19 @@ class ReportPortalClient:
                 verify_ssl = False
             elif ssl_env not in ("true", "1", "yes", "on", "enabled"):
                 LOGGER.warning(
-                    "Unrecognized REPORTPORTAL_VERIFY_SSL value '%s', defaulting to False. "
+                    "Unrecognized REPORTPORTAL_VERIFY_SSL value '%s', defaulting to True (secure). "
                     "Valid values: true/1/yes/on/enabled or false/0/no/off/disabled",
                     ssl_env,
                 )
-                verify_ssl = False
+                verify_ssl = True
             else:
                 verify_ssl = True
 
         self._session.verify = verify_ssl
 
         if verify_ssl is False:
-            # Note: This suppresses InsecureRequestWarning globally for the entire process.
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            import warnings
+            warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
             LOGGER.warning("SSL verification disabled for ReportPortal connection")
 
         retry_strategy = Retry(
@@ -163,6 +163,9 @@ class ReportPortalClient:
     def close(self) -> None:
         """Close the HTTP session."""
         self._session.close()
+        # Re-enable SSL warnings that may have been suppressed
+        import warnings
+        warnings.filterwarnings("default", category=urllib3.exceptions.InsecureRequestWarning)
 
     def __enter__(self) -> ReportPortalClient:
         return self
