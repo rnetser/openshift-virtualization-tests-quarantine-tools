@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Requirements Coverage Report: Test Quarantine &amp; Remediation</title>
+    <style>
+        :root {
+            --green: #22c55e;
+            --yellow: #eab308;
+            --red: #ef4444;
+            --blue: #3b82f6;
+            --gray: #6b7280;
+            --light-gray: #f3f4f6;
+            --dark: #1f2937;
+            --green-bg: #dcfce7;
+            --green-fg: #166534;
+            --yellow-bg: #fef9c3;
+            --yellow-fg: #854d0e;
+            --red-bg: #fee2e2;
+            --red-fg: #991b1b;
+            --blue-bg: #eff6ff;
+            --amber-bg: #fffbeb;
+            --amber-border: #f59e0b;
+            --gray-bg: #e5e7eb;
+            --gray-fg: #374151;
+            --sidebar-width: 260px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--light-gray);
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
+        /* --- Sidebar Navigation --- */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--dark);
+            color: #e5e7eb;
+            overflow-y: auto;
+            padding: 1.5rem 0;
+            z-index: 100;
+        }
+        .sidebar-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--gray);
+            padding: 0 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+        .sidebar a {
+            display: block;
+            padding: 0.4rem 1.25rem;
+            color: #d1d5db;
+            text-decoration: none;
+            font-size: 0.8125rem;
+            border-left: 3px solid transparent;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .sidebar a:hover {
+            background: rgba(255,255,255,0.06);
+            color: white;
+        }
+        .sidebar a.active {
+            border-left-color: var(--blue);
+            color: white;
+            background: rgba(59,130,246,0.1);
+        }
+        .sidebar .nav-group {
+            margin-bottom: 1rem;
+        }
+        .sidebar .nav-group-label {
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #9ca3af;
+            padding: 0.75rem 1.25rem 0.25rem;
+            font-weight: 600;
+        }
+        .sidebar a .nav-num {
+            display: inline-block;
+            width: 2rem;
+            color: var(--gray);
+            font-size: 0.75rem;
+        }
+
+        /* --- Main Content --- */
+        .main {
+            margin-left: var(--sidebar-width);
+            padding: 2rem 2.5rem;
+            max-width: 1000px;
+        }
+
+        /* --- Header --- */
+        .page-header {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem 2rem 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-top: 4px solid var(--blue);
+        }
+        .page-header h1 {
+            font-size: 1.5rem;
+            color: var(--dark);
+            margin-bottom: 0.75rem;
+        }
+        .header-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            font-size: 0.875rem;
+            color: var(--gray);
+        }
+        .header-meta strong {
+            color: var(--dark);
+        }
+        .header-meta a {
+            color: var(--blue);
+            text-decoration: none;
+        }
+        .header-meta a:hover {
+            text-decoration: underline;
+        }
+
+        /* --- Section Cards --- */
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 1.75rem 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            scroll-margin-top: 1rem;
+        }
+        .section h2 {
+            margin-bottom: 1.25rem;
+            color: var(--dark);
+            font-size: 1.25rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--light-gray);
+        }
+        .section h3 {
+            margin: 1.5rem 0 0.75rem;
+            color: var(--dark);
+            font-size: 1.05rem;
+        }
+        .section h3:first-of-type {
+            margin-top: 0.5rem;
+        }
+
+        /* --- Tables --- */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.75rem 0 1rem;
+        }
+        th, td {
+            padding: 0.625rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--light-gray);
+            font-size: 0.875rem;
+        }
+        th {
+            background: var(--light-gray);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        /* --- Badges --- */
+        .badge {
+            display: inline-block;
+            padding: 0.125rem 0.625rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge-done {
+            background: var(--green-bg);
+            color: var(--green-fg);
+        }
+        .badge-adapted {
+            background: var(--green-bg);
+            color: var(--green-fg);
+        }
+        .badge-new {
+            background: var(--gray-bg);
+            color: var(--gray-fg);
+        }
+        .badge-closed {
+            background: var(--gray-bg);
+            color: var(--gray-fg);
+        }
+        .badge-high {
+            background: var(--red-bg);
+            color: var(--red-fg);
+        }
+        .badge-medium {
+            background: var(--yellow-bg);
+            color: var(--yellow-fg);
+        }
+        .badge-low {
+            background: var(--gray-bg);
+            color: var(--gray-fg);
+        }
+        .badge-status {
+            font-size: 0.8125rem;
+            font-weight: 700;
+            padding: 0.125rem 0.75rem;
+        }
+
+        /* --- SLA Age Badges --- */
+        .age-badge {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .age-green { background: var(--green-bg); color: var(--green-fg); }
+        .age-yellow { background: var(--yellow-bg); color: var(--yellow-fg); }
+        .age-red { background: var(--red-bg); color: var(--red-fg); }
+
+        /* --- See / Note Callouts --- */
+        .see-callout {
+            background: var(--blue-bg);
+            border-left: 3px solid var(--blue);
+            padding: 0.625rem 1rem;
+            margin: 0.75rem 0;
+            font-size: 0.875rem;
+            color: var(--dark);
+            border-radius: 0 4px 4px 0;
+        }
+        .see-callout strong {
+            color: var(--blue);
+        }
+        .see-callout code {
+            background: #dbeafe;
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            font-size: 0.8125rem;
+        }
+
+        /* --- Code Blocks --- */
+        .code-wrapper {
+            position: relative;
+            margin: 0.75rem 0;
+        }
+        .code-block {
+            background: var(--dark);
+            color: #e5e7eb;
+            padding: 1rem 1.25rem;
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+            font-size: 0.8125rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(255,255,255,0.1);
+            color: #9ca3af;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 0.25rem 0.625rem;
+            border-radius: 4px;
+            font-size: 0.6875rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.15s, color 0.15s;
+        }
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .copy-btn.copied {
+            background: var(--green);
+            color: white;
+            border-color: var(--green);
+        }
+
+        /* --- Inline Code --- */
+        code {
+            background: var(--light-gray);
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+            font-size: 0.8125rem;
+        }
+
+        /* --- Key Files List --- */
+        .key-files {
+            margin: 0.5rem 0 0.75rem;
+        }
+        .key-files-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+        .key-files ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .key-files li {
+            font-size: 0.8375rem;
+            padding: 0.2rem 0;
+            color: var(--dark);
+        }
+        .key-files li::before {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--blue);
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        /* --- Open Tasks Section (Amber) --- */
+        .section-amber {
+            border-left: 4px solid var(--amber-border);
+        }
+        .section-amber h2 {
+            color: #92400e;
+        }
+        .section-amber h3 {
+            color: #92400e;
+        }
+        .task-table th {
+            background: var(--amber-bg);
+        }
+
+        /* --- Paragraph Text --- */
+        .section p {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        .overall-status {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--green-fg);
+            background: var(--green-bg);
+            display: inline-block;
+            padding: 0.375rem 1rem;
+            border-radius: 6px;
+            margin: 0.5rem 0;
+        }
+
+        /* --- Jira Links --- */
+        a.jira-link {
+            color: var(--blue);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        a.jira-link:hover {
+            text-decoration: underline;
+        }
+
+        /* --- Jira Badges --- */
+        .jira-badge {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 0.1rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: background 0.15s;
+        }
+        .jira-badge:hover {
+            background: #bfdbfe;
+            text-decoration: none;
+        }
+        .jira-badge + .jira-badge {
+            margin-left: 0.25rem;
+        }
+        .jira-ref {
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+        .jira-ref .jira-badge {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+        }
+
+        /* --- Lists --- */
+        .content-list {
+            margin: 0.5rem 0 0.75rem 1.25rem;
+            font-size: 0.9rem;
+        }
+        .content-list li {
+            margin-bottom: 0.25rem;
+        }
+
+        /* --- Metric Table --- */
+        .metric-table td:first-child {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+            font-size: 0.8125rem;
+        }
+
+        /* --- Verified Results --- */
+        .verified-results {
+            margin: 0.75rem 0;
+        }
+        .verified-results ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .verified-results li {
+            font-size: 0.875rem;
+            padding: 0.2rem 0;
+        }
+        .verified-results li::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        /* --- Footer --- */
+        .footer {
+            text-align: center;
+            color: var(--gray);
+            font-size: 0.8125rem;
+            margin-top: 2rem;
+            padding: 1rem 0;
+        }
+
+        /* --- Mobile Toggle --- */
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 0.75rem;
+            left: 0.75rem;
+            z-index: 200;
+            background: var(--dark);
+            color: white;
+            border: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+
+        /* --- Print Styles --- */
+        @media print {
+            .sidebar, .sidebar-toggle, .copy-btn { display: none !important; }
+            .main {
+                margin-left: 0;
+                padding: 0;
+                max-width: 100%;
+            }
+            body { background: white; }
+            .section {
+                box-shadow: none;
+                border: 1px solid #e5e7eb;
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            .page-header {
+                box-shadow: none;
+                border: 1px solid #e5e7eb;
+            }
+            .code-block {
+                background: #f3f4f6 !important;
+                color: #1f2937 !important;
+                border: 1px solid #d1d5db;
+            }
+            a { color: var(--blue) !important; }
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 900px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .sidebar-toggle {
+                display: block;
+            }
+            .main {
+                margin-left: 0;
+                padding: 1rem;
+            }
+            .page-header h1 {
+                font-size: 1.2rem;
+            }
+            .header-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            table {
+                font-size: 0.8rem;
+            }
+            th, td {
+                padding: 0.4rem 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Mobile sidebar toggle -->
+<button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle navigation">&#9776;</button>
+
+<!-- Sidebar Navigation -->
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-title">Table of Contents</div>
+
+    <div class="nav-group">
+        <a href="#coverage-summary"><span class="nav-num"></span>Coverage Summary</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-label">1. Flaky Test Detection</div>
+        <a href="#req-1-1"><span class="nav-num">1.1</span> Dashboard failure rates</a>
+        <a href="#req-1-2"><span class="nav-num">1.2</span> Pattern identification</a>
+        <a href="#req-1-3"><span class="nav-num">1.3</span> Automated reports</a>
+        <a href="#req-1-4"><span class="nav-num">1.4</span> Historical data</a>
+        <a href="#req-1-5"><span class="nav-num">1.5</span> Result aggregators</a>
+        <a href="#req-1-6"><span class="nav-num">1.6</span> Prometheus metrics</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-label">2. Quarantine Workflow</div>
+        <a href="#req-2-1"><span class="nav-num">2.1</span> Flag failing tests</a>
+        <a href="#req-2-2"><span class="nav-num">2.2</span> Move to quarantine</a>
+        <a href="#req-2-3"><span class="nav-num">2.3</span> Open Jira tickets</a>
+        <a href="#req-2-4"><span class="nav-num">2.4</span> Exclude from main</a>
+        <a href="#req-2-5"><span class="nav-num">2.5</span> Failure context</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-label">3. Review &amp; Cleanup</div>
+        <a href="#req-3-1"><span class="nav-num">3.1</span> Biweekly reviews</a>
+        <a href="#req-3-2"><span class="nav-num">3.2</span> Re-enable fixed</a>
+        <a href="#req-3-3"><span class="nav-num">3.3</span> Archive obsolete</a>
+        <a href="#req-3-4"><span class="nav-num">3.4</span> Dashboard state</a>
+        <a href="#req-3-5"><span class="nav-num">3.5</span> 80%+ remediated</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-label">Reference</div>
+        <a href="#cnv-68880">CNV-68880 Coverage</a>
+        <a href="#open-tasks">Open Tasks</a>
+        <a href="#cli-entry-points">CLI Entry Points</a>
+        <a href="#module-index">Module Index</a>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main">
+
+    <!-- Page Header -->
+    <header class="page-header" id="top">
+        <h1>Requirements Coverage Report: Test Quarantine &amp; Remediation</h1>
+        <div class="header-meta">
+            <span><strong>Project:</strong> openshift-virtualization-tests-quarantine-tools</span>
+            <span><strong>Date:</strong> 2026-03-01</span>
+            <span><strong>Jira:</strong>
+                <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-link">CNV-62491</a>,
+                <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-link">CNV-68880</a>
+            </span>
+        </div>
+    </header>
+
+    <!-- Coverage Summary -->
+    <section class="section" id="coverage-summary">
+        <h2>Coverage Summary</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Requirement</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Jira Source</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1.1</td>
+                    <td>Dashboard to track test failure rates</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td>HTML dashboard with per-test failure rate badges</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>1.2</td>
+                    <td>Identify patterns (tests failing &gt;3x in 7 days)</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>get_flaky_tests(threshold=3, days=7)</code> with configurable CLI flags</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>1.3</td>
+                    <td>Automated reports highlight flaky tests</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td>Flaky Test Candidates section in dashboard, fed by ReportPortal</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>1.4</td>
+                    <td>Historical failure data retained for trend analysis</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>get_test_history()</code> with configurable lookback window</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>1.5</td>
+                    <td>Integrate with test result aggregators</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td>Full ReportPortal REST API client</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>1.6</td>
+                    <td>Develop Prometheus metrics for test stability</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>quarantine-metrics</code> CLI exporter</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>2.1</td>
+                    <td>Flag failing tests for quarantine</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>quarantine-analyzer</code> CLI + GitHub workflow</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>2.2</td>
+                    <td>Move quarantined tests to quarantine/ directory</td>
+                    <td><span class="badge badge-adapted">Done (adapted)</span></td>
+                    <td>Uses <code>@pytest.mark.xfail(reason=QUARANTINED, run=False)</code> instead</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>2.3</td>
+                    <td>Open Jira tickets for remediation</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>create_quarantine_ticket()</code> in <code>quarantine_jira.py</code></td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>2.4</td>
+                    <td>Quarantined tests excluded from main, run nightly</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td>xfail(run=False) markers exclude tests from CI; nightly re-run is a target repo CI concern</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>2.5</td>
+                    <td>Remediation tickets include failure context</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td>Tickets include failure rate, team, branch, test path, failure logs</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>3.1</td>
+                    <td>Schedule biweekly reviews</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>quarantine-review.yml</code> runs 1st and 15th of each month</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>3.2</td>
+                    <td>Re-enable fixed tests</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>check_quarantine_health()</code> identifies de-quarantine candidates</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>3.3</td>
+                    <td>Archive obsolete tests</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td><code>quarantine_age_days</code> tracked; &gt;30-day SLA breach flagged</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>3.4</td>
+                    <td>Quarantine dashboard reflects current state</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td>Multi-repo HTML dashboard with live ReportPortal data</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+                <tr>
+                    <td>3.5</td>
+                    <td>80%+ remediated within 30 days</td>
+                    <td><span class="badge badge-done">Done</span></td>
+                    <td>Color-coded age badges provide SLA visibility per team</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a></td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="overall-status">All 16 requirements are fully implemented.</div>
+    </section>
+
+    <!-- Section 1: Flaky Test Detection -->
+    <section class="section" id="req-1-1">
+        <h2>1. Flaky Test Detection (CNV-62491)</h2>
+
+        <h3 id="req-1-1-heading">1.1 Dashboard to track test failure rates</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;1 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Flaky Test Detection)</p>
+        <p>The HTML dashboard renders per-test failure rates with color-coded badges. The <code>TestInfo.failure_rate</code> field stores the rate, and <code>_generate_flaky_tests_section()</code> in <code>dashboard.py</code> renders each test with its failure percentage in the Flaky Test Candidates section.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/dashboard.py</code> -- <code>TestInfo.failure_rate</code>, <code>_generate_flaky_tests_section()</code>, <code>_calculate_stats()</code></li>
+            </ul>
+        </div>
+
+        <div class="see-callout" style="margin-bottom: 1.5rem;">
+            <strong>Prerequisites:</strong> Commands using <code>--repo-path</code> require a local clone. Run <code>uv run quarantine-dashboard --keep-clones</code> first to create clones at <code>/tmp/quarantine-stats/</code>.
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests --with-reportportal --flaky-threshold 0.1</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> <code>quarantine_tools/dashboard.html</code> -- open in browser, scroll to "Flaky Test Candidates" section. Each test shows its failure rate as a percentage badge.
+        </div>
+    </section>
+
+    <section class="section" id="req-1-2">
+        <h3>1.2 Identify patterns (tests failing &gt;3x in 7 days)</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;1 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Flaky Test Detection)</p>
+        <p>The <code>ReportPortalClient.get_flaky_tests()</code> method queries the ReportPortal API with configurable <code>threshold</code> (failure count) and <code>days</code> (time window) parameters. The CLI exposes these as <code>--flaky-threshold</code> and <code>--days</code> flags.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/reportportal_client.py</code> -- <code>get_flaky_tests(threshold=3, days=7)</code></li>
+                <li><code>quarantine_tools/analyzer.py</code> -- <code>analyze_flaky_tests()</code>, CLI <code>--threshold</code> and <code>--days</code> flags</li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run flaky-test-analyzer --threshold 3 --days 7 --branch cnv-4.21</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- table listing tests exceeding the threshold with failure counts and rates.
+        </div>
+    </section>
+
+    <section class="section" id="req-1-3">
+        <h3>1.3 Automated reports highlight flaky tests requiring quarantine</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;1 AC | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Flaky Test Detection)</p>
+        <p>The dashboard pipeline fetches flaky test data from ReportPortal per branch:</p>
+        <ol class="content-list">
+            <li><code>_create_reportportal_client()</code> creates the RP client from CLI flags or environment variables.</li>
+            <li><code>_build_flaky_lookup()</code> queries RP per branch using <code>filter.cnt.name</code> to match launch names (e.g., <code>test-pytest-cnv-4.18-...</code>).</li>
+            <li><code>_calculate_stats(flaky_threshold=0.15)</code> flags candidates exceeding the threshold.</li>
+            <li>The HTML section "Flaky Test Candidates" renders the results.</li>
+        </ol>
+        <p>The <code>quarantine-recommender.yml</code> GitHub workflow automates daily analysis and creates GitHub issues for new quarantine candidates.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/dashboard.py</code> -- <code>_build_flaky_lookup()</code>, <code>_calculate_stats()</code>, <code>_generate_flaky_tests_section()</code></li>
+                <li><code>.github/workflows/quarantine-recommender.yml</code></li>
+            </ul>
+        </div>
+
+        <div class="verified-results">
+            <p><strong>Verified results from live data:</strong></p>
+            <ul>
+                <li>cnv-4.21: 1,006 launches, 744 flaky tests</li>
+                <li>cnv-4.20: 842 launches, 405 flaky tests</li>
+                <li>cnv-4.19: 598 launches, 273 flaky tests</li>
+                <li>cnv-4.18: 297 launches, 101 flaky tests</li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <p>The dashboard command from 1.1 auto-populates the "Flaky Test Candidates" section from ReportPortal data. For the GitHub workflow:</p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"># Manual trigger (requires repo push):
+gh workflow run quarantine-recommender.yml</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> GitHub Issues tab -- a new issue is created listing quarantine candidates.
+        </div>
+    </section>
+
+    <section class="section" id="req-1-4">
+        <h3>1.4 Historical failure data retained for trend analysis</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;1 AC | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Flaky Test Detection)</p>
+        <p><code>ReportPortalClient.get_test_history()</code> retrieves per-test execution history with a configurable lookback window. The analyzer uses this to calculate trend direction (improving, stable, worsening) by comparing failure counts in the first and second halves of the time window.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/reportportal_client.py</code> -- <code>get_test_history(test_name, days=7)</code></li>
+                <li><code>quarantine_tools/analyzer.py</code> -- <code>calculate_trend()</code></li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run flaky-test-analyzer --branch cnv-4.21 --days 30</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- includes trend direction (improving/stable/worsening) based on comparing first vs second half of the time window.
+        </div>
+    </section>
+
+    <section class="section" id="req-1-5">
+        <h3>1.5 Integrate with test result aggregators</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;1 Task | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Flaky Test Detection)</p>
+        <p>The <code>ReportPortalClient</code> class provides a full REST API wrapper for ReportPortal, covering launches, test items, statistics, and pagination. It filters by launch name to match CNV branch versions and supports branch-based attribute filtering.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/reportportal_client.py</code> -- <code>ReportPortalClient</code> class with methods: <code>get_test_history()</code>, <code>get_flaky_tests()</code>, <code>get_test_failure_rate()</code>, <code>get_launch_results()</code></li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run python -c "
+from quarantine_tools.reportportal_client import ReportPortalClient
+with ReportPortalClient() as client:
+    launches = client._get_launch_ids(since_date='2026-02-01T00:00:00Z', launch_name_contains='cnv-4.21')
+    print(f'Found {len(launches)} launches')
+"</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- launch count confirms ReportPortal connectivity and data retrieval.
+        </div>
+    </section>
+
+    <section class="section" id="req-1-6">
+        <h3>1.6 Develop Prometheus metrics for test stability</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;1 Task | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Flaky Test Detection)</p>
+        <p>The <code>quarantine-metrics</code> CLI exports the following Prometheus metrics with <code>branch</code> and <code>team</code> labels:</p>
+
+        <table class="metric-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>cnv_tests_total</td><td>Total number of tests</td></tr>
+                <tr><td>cnv_tests_quarantined</td><td>Number of quarantined tests</td></tr>
+                <tr><td>cnv_tests_health_percent</td><td>Test health percentage</td></tr>
+                <tr><td>cnv_tests_flaky_candidates</td><td>Flaky tests not yet quarantined</td></tr>
+                <tr><td>cnv_quarantine_avg_age_days</td><td>Average quarantine age in days</td></tr>
+            </tbody>
+        </table>
+
+        <p>Supports writing to file (<code>--output-file</code>) and pushing to Prometheus Pushgateway (<code>--push-gateway</code>).</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/metrics.py</code> -- <code>collect_metrics()</code>, <code>format_prometheus()</code>, <code>push_to_gateway()</code></li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run quarantine-metrics --repo-path /tmp/quarantine-stats/openshift-virtualization-tests --branch cnv-4.21</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- Prometheus text format metrics (e.g., <code>cnv_tests_total{branch="cnv-4.21",team="virt"} 245</code>). With <code>--output-file metrics.txt</code>, writes to file.
+        </div>
+    </section>
+
+    <!-- Section 2: Quarantine Workflow -->
+    <section class="section" id="req-2-1">
+        <h2>2. Quarantine Workflow (CNV-62491)</h2>
+
+        <h3>2.1 Flag failing tests for quarantine</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;2 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Workflow)</p>
+        <p>The <code>quarantine-analyzer</code> CLI queries ReportPortal for tests exceeding the configured failure threshold and produces reports in table, JSON, or HTML format. The <code>--check-quarantined</code> flag cross-references flaky tests against currently quarantined tests to identify new quarantine candidates.</p>
+        <p>The <code>quarantine-recommender.yml</code> GitHub workflow runs this analysis daily on weekdays and automatically opens GitHub issues for new candidates.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/analyzer.py</code> -- <code>analyze_flaky_tests()</code>, <code>cross_reference_quarantined()</code></li>
+                <li><code>.github/workflows/quarantine-recommender.yml</code></li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run flaky-test-analyzer --repo-path /tmp/quarantine-stats/openshift-virtualization-tests --threshold 3 --days 7 --branch cnv-4.21 --check-quarantined</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- two sections: "Flaky Tests" (all) and "New Quarantine Candidates" (flaky but not yet quarantined).
+        </div>
+    </section>
+
+    <section class="section" id="req-2-2">
+        <h3>2.2 Move quarantined tests to quarantine/ directory</h3>
+        <p><span class="badge badge-adapted badge-status">Done (design adapted)</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;2 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Workflow)</p>
+        <p>The original requirement specified moving tests to a <code>quarantine/</code> directory. The implementation uses <code>@pytest.mark.xfail(reason=f"{QUARANTINED}: ...", run=False)</code> markers instead. This approach is preferable because:</p>
+        <ul class="content-list">
+            <li>Tests remain in their original file locations, preserving import paths and reducing merge conflicts.</li>
+            <li>pytest natively recognizes <code>xfail(run=False)</code>, so quarantined tests are skipped in CI without custom infrastructure.</li>
+            <li>The <code>quarantine-helper</code> CLI provides <code>apply</code> and <code>remove</code> subcommands to manage markers programmatically.</li>
+        </ul>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/helper.py</code> -- <code>insert_quarantine_marker()</code>, <code>remove_quarantine_marker()</code></li>
+                <li><code>quarantine_tools/constants.py</code> -- <code>QUARANTINED</code> constant</li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests --json | python -m json.tool | grep -A5 '"quarantined_tests"'</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- JSON listing all quarantined tests with their xfail markers, reasons, and Jira tickets.
+        </div>
+    </section>
+
+    <section class="section" id="req-2-3">
+        <h3>2.3 Open Jira tickets for remediation</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;2 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Workflow)</p>
+        <p><code>create_quarantine_ticket()</code> creates Bug tickets in the CNV Jira project with:</p>
+        <ul class="content-list">
+            <li>Title prefix: <code>[stabilization]</code></li>
+            <li>Label: <code>quarantined-test</code></li>
+            <li>Priority: Critical for gating pipelines, Major otherwise</li>
+            <li>Description includes test name, team, branch, gating status, and failure context</li>
+        </ul>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/quarantine_jira.py</code> -- <code>create_quarantine_ticket()</code>, <code>get_open_quarantine_tickets()</code></li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run python -c "
+from quarantine_tools.quarantine_jira import get_open_quarantine_tickets
+tickets = get_open_quarantine_tickets()
+for t in tickets:
+    print(f'{t[\"key\"]}: {t[\"fields\"][\"summary\"]}')
+"</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- list of open <code>[stabilization]</code> Jira tickets. Requires <code>JIRA_TOKEN</code> or <code>PYTEST_JIRA_TOKEN</code> env var.
+        </div>
+    </section>
+
+    <section class="section" id="req-2-4">
+        <h3>2.4 Quarantined tests excluded from main, run nightly</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;2 AC | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Workflow)</p>
+        <p>The <code>@pytest.mark.xfail(run=False)</code> marker applied by <code>quarantine-helper apply</code> ensures quarantined tests are skipped in all CI pipeline runs. This is the standard pytest mechanism for test exclusion -- no custom infrastructure required.</p>
+        <p>The nightly regression job (re-running quarantined tests to check if they are fixed) is a CI pipeline configuration in the target repository, outside the scope of this tools project. The <code>check_quarantine_health()</code> function in the analyzer provides the analysis side of this workflow.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/helper.py</code> -- <code>insert_quarantine_marker()</code> applies <code>xfail(run=False)</code></li>
+                <li><code>quarantine_tools/analyzer.py</code> -- <code>check_quarantine_health()</code> identifies tests ready for de-quarantine</li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"># Verify quarantined tests are marked with xfail(run=False):
+uv run quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests --json | python -m json.tool | grep -c '"quarantined"'</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- count of quarantined tests. Each has an <code>xfail(run=False)</code> marker that excludes it from CI runs.
+        </div>
+    </section>
+
+    <section class="section" id="req-2-5">
+        <h3>2.5 Remediation tickets include failure context</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;2 AC | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Workflow)</p>
+        <p>Jira tickets created by <code>create_quarantine_ticket()</code> include structured context: failure rate, team assignment, branch, gating pipeline status, test file path, and raw failure logs formatted in a <code>{noformat}</code> block.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/quarantine_jira.py</code> -- <code>create_quarantine_ticket()</code></li>
+            </ul>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> Same as 2.3 -- open any <code>[stabilization]</code> ticket in the Jira browser to see the structured description with failure rate, team, branch, and failure logs.
+        </div>
+    </section>
+
+    <!-- Section 3: Quarantine Review & Cleanup -->
+    <section class="section" id="req-3-1">
+        <h2>3. Quarantine Review &amp; Cleanup (CNV-62491)</h2>
+
+        <h3>3.1 Schedule biweekly reviews</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;3 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Review &amp; Cleanup)</p>
+        <p>The <code>quarantine-review.yml</code> GitHub Actions workflow is scheduled to run on the 1st and 15th of each month at 9:00 UTC. It generates a dashboard snapshot, runs the flaky test analyzer, and creates a GitHub issue with:</p>
+        <ul class="content-list">
+            <li>Per-team breakdown table</li>
+            <li>SLA breach list (tests quarantined &gt;30 days)</li>
+            <li>De-quarantine candidates (tests now passing consistently)</li>
+            <li>Action item checklist</li>
+        </ul>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>.github/workflows/quarantine-review.yml</code></li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"># Check workflow exists:
+ls -la .github/workflows/quarantine-review.yml
+# Manual trigger:
+gh workflow run quarantine-review.yml</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> GitHub Issues tab -- review issue created with per-team breakdown, SLA breaches, and de-quarantine candidates.
+        </div>
+    </section>
+
+    <section class="section" id="req-3-2">
+        <h3>3.2 Re-enable fixed tests</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;3 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Review &amp; Cleanup)</p>
+        <p><code>check_quarantine_health()</code> cross-references quarantined tests against two signals:</p>
+        <ol class="content-list">
+            <li><strong>ReportPortal results</strong> -- counts consecutive passes; tests passing consistently are flagged.</li>
+            <li><strong>Jira ticket status</strong> -- checks if the linked remediation ticket is resolved/closed.</li>
+        </ol>
+        <p>De-quarantine candidates are classified by reason: <code>passing_consistently</code>, <code>jira_resolved</code>, or <code>both</code>.</p>
+        <p>The <code>quarantine-helper remove</code> CLI command handles the mechanical step of removing the <code>xfail</code> decorator.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/analyzer.py</code> -- <code>check_quarantine_health()</code>, <code>_count_consecutive_passes()</code></li>
+                <li><code>quarantine_tools/helper.py</code> -- <code>remove_quarantine_marker()</code></li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run flaky-test-analyzer --repo-path /tmp/quarantine-stats/openshift-virtualization-tests --health-check --branch cnv-4.21</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- "De-quarantine Candidates" section listing tests that are now passing consistently or have resolved Jira tickets.
+        </div>
+    </section>
+
+    <section class="section" id="req-3-3">
+        <h3>3.3 Archive obsolete tests</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;3 | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Review &amp; Cleanup)</p>
+        <p>The dashboard tracks <code>quarantine_age_days</code> for every quarantined test. Tests quarantined longer than 30 days are flagged as SLA breaches with a red badge. The biweekly review workflow surfaces these in a dedicated table for team review and escalation.</p>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/dashboard.py</code> -- <code>quarantine_age_days</code> field in <code>TestInfo</code></li>
+                <li><code>.github/workflows/quarantine-review.yml</code> -- SLA breach table generation</li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> <code>quarantine_tools/dashboard.html</code> -- quarantined tests tab. Each test shows a color-coded age badge (green &lt;14d, yellow 14-30d, red &gt;30d). Tests with red badges are SLA breaches.
+        </div>
+    </section>
+
+    <section class="section" id="req-3-4">
+        <h3>3.4 Quarantine dashboard reflects current state</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;3 AC | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Review &amp; Cleanup)</p>
+        <p>The dashboard generator produces a multi-repo HTML dashboard with:</p>
+        <ul class="content-list">
+            <li>Version comparison tables across all CNV branches</li>
+            <li>Per-team breakdown with total/quarantined/active counts</li>
+            <li>Tabbed quarantined test details with Jira links and age badges</li>
+            <li>Flaky Test Candidates section populated from live ReportPortal data</li>
+            <li>JSON output mode for machine consumption</li>
+        </ul>
+
+        <div class="key-files">
+            <div class="key-files-label">Key files:</div>
+            <ul>
+                <li><code>quarantine_tools/dashboard.py</code> -- <code>DashboardGenerator</code> class</li>
+            </ul>
+        </div>
+
+        <p><strong>How to Verify:</strong></p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests --with-reportportal</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> <code>quarantine_tools/dashboard.html</code> -- open in browser. Shows version comparison tables, team breakdown, tabbed quarantined details, and flaky candidates.
+        </div>
+    </section>
+
+    <section class="section" id="req-3-5">
+        <h3>3.5 80%+ of quarantined tests remediated within 30 days</h3>
+        <p><span class="badge badge-done badge-status">Done</span></p>
+        <p class="jira-ref"><strong>Jira:</strong> <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-badge">CNV-62491</a> &sect;3 AC | <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-badge">CNV-68880</a> (Quarantine Review &amp; Cleanup)</p>
+        <p>SLA visibility is provided through color-coded quarantine age badges:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Color</th>
+                    <th>Age Range</th>
+                    <th>Meaning</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="age-badge age-green">Green</span></td>
+                    <td>&lt; 14 days</td>
+                    <td>Within target</td>
+                </tr>
+                <tr>
+                    <td><span class="age-badge age-yellow">Yellow</span></td>
+                    <td>14-30 days</td>
+                    <td>Approaching SLA</td>
+                </tr>
+                <tr>
+                    <td><span class="age-badge age-red">Red</span></td>
+                    <td>&gt; 30 days</td>
+                    <td>SLA breach</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>The Prometheus metric <code>cnv_quarantine_avg_age_days</code> enables monitoring and alerting on remediation velocity. The biweekly review workflow explicitly surfaces SLA breaches for escalation.</p>
+
+        <p><strong>How to Verify:</strong></p>
+        <p>The dashboard from 3.4 shows age badges in the quarantined tests tab. Additionally:</p>
+        <div class="code-wrapper">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block">uv run quarantine-metrics --repo-path /tmp/quarantine-stats/openshift-virtualization-tests --branch cnv-4.21 --include-flaky | grep avg_age</pre>
+        </div>
+
+        <div class="see-callout">
+            <strong>See:</strong> stdout -- <code>cnv_quarantine_avg_age_days</code> metric showing average days quarantined per team.
+        </div>
+    </section>
+
+    <!-- CNV-68880 Coverage -->
+    <section class="section" id="cnv-68880">
+        <h2>CNV-68880 Coverage</h2>
+        <p><a href="https://issues.redhat.com/browse/CNV-68880" class="jira-link">CNV-68880</a> ("Phase 2 - Meaningful CI for openshift-virtualization-tests") contains multiple user stories. This project covers the <strong>Test Quarantine &amp; Remediation</strong> user story, which maps identically to <a href="https://issues.redhat.com/browse/CNV-62491" class="jira-link">CNV-62491</a> above.</p>
+        <p>The remaining user stories in CNV-68880 are outside the scope of this tool:</p>
+        <ul class="content-list">
+            <li><strong>Environment Standardization</strong> -- CI environment configuration (not quarantine-related).</li>
+            <li><strong>SIG-Driven Test Optimization</strong> -- Test organization by SIG (separate effort).</li>
+        </ul>
+    </section>
+
+    <!-- Open Tasks in Other Repositories -->
+    <section class="section section-amber" id="open-tasks">
+        <h2>Open Tasks in Other Repositories</h2>
+        <p>The quarantine-tools project provides all the tooling. The following tasks must be completed in other repositories to fully operationalize the quarantine workflow.</p>
+
+        <h3>openshift-virtualization-tests</h3>
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Task</th>
+                    <th>Description</th>
+                    <th>Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Add <code>--run-quarantined-only</code> pytest option</td>
+                    <td>Add CLI option to <code>conftest.py</code> that inverts the quarantine filter: keep only <code>xfail(QUARANTINED)</code> tests and override <code>run=False</code> to <code>run=True</code>. Enables nightly regression of quarantined tests.</td>
+                    <td><span class="badge badge-high">High</span></td>
+                </tr>
+                <tr>
+                    <td>Deploy GitHub Actions workflows</td>
+                    <td>Copy <code>quarantine-recommender.yml</code> and <code>quarantine-review.yml</code> to the target repo's <code>.github/workflows/</code> and configure secrets (<code>REPORTPORTAL_URL</code>, <code>REPORTPORTAL_TOKEN</code>, <code>REPORTPORTAL_PROJECT</code>).</td>
+                    <td><span class="badge badge-high">High</span></td>
+                </tr>
+                <tr>
+                    <td>Add quarantine-tools as dependency</td>
+                    <td>Add <code>quarantine-tools</code> package to the repo's dev dependencies so CI jobs can invoke <code>quarantine-dashboard</code>, <code>flaky-test-analyzer</code>, etc.</td>
+                    <td><span class="badge badge-high">High</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>CI / Jenkins</h3>
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Task</th>
+                    <th>Description</th>
+                    <th>Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Create nightly quarantine regression job</td>
+                    <td>Jenkins job that runs <code>pytest --run-quarantined-only</code> against the test suite to detect quarantined tests that are now passing. Results feed into <code>check_quarantine_health()</code>.</td>
+                    <td><span class="badge badge-high">High</span></td>
+                </tr>
+                <tr>
+                    <td>Configure ReportPortal environment variables</td>
+                    <td>Set <code>REPORTPORTAL_URL</code>, <code>REPORTPORTAL_TOKEN</code>, <code>REPORTPORTAL_PROJECT</code> in CI runner environment for dashboard and analyzer jobs.</td>
+                    <td><span class="badge badge-high">High</span></td>
+                </tr>
+                <tr>
+                    <td>Set up Prometheus pushgateway</td>
+                    <td>Configure <code>quarantine-metrics --push-gateway &lt;url&gt;</code> as a post-build step to export test stability metrics to the monitoring stack.</td>
+                    <td><span class="badge badge-medium">Medium</span></td>
+                </tr>
+                <tr>
+                    <td>Schedule dashboard generation</td>
+                    <td>Add periodic CI job (daily or weekly) that runs <code>quarantine-dashboard --with-reportportal</code> and publishes the HTML to an accessible location (e.g., internal pages, artifact storage).</td>
+                    <td><span class="badge badge-medium">Medium</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Jira</h3>
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Task</th>
+                    <th>Description</th>
+                    <th>Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Configure webhook for ticket status sync</td>
+                    <td>Optional: set up a Jira webhook to notify when <code>[stabilization]</code> tickets are resolved, enabling automated de-quarantine candidate detection without polling.</td>
+                    <td><span class="badge badge-low">Low</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>CNV-68880 Subtasks (All Status: New)</h3>
+        <p>The following subtasks of the parent epic <a href="https://issues.redhat.com/browse/CNV-68880" class="jira-link">CNV-68880</a> are still open and cover broader CI concerns beyond quarantine:</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Jira Key</th>
+                    <th>Summary</th>
+                    <th>Scope</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68881" class="jira-link"><span class="badge badge-new">New</span> CNV-68881</a></td>
+                    <td>Upstream roadmap issue</td>
+                    <td>Roadmap tracking</td>
+                </tr>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68882" class="jira-link"><span class="badge badge-new">New</span> CNV-68882</a></td>
+                    <td>Upstream design</td>
+                    <td>Architecture design</td>
+                </tr>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68883" class="jira-link"><span class="badge badge-new">New</span> CNV-68883</a></td>
+                    <td>Upstream documentation</td>
+                    <td>Documentation</td>
+                </tr>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68884" class="jira-link"><span class="badge badge-new">New</span> CNV-68884</a></td>
+                    <td>Upgrade consideration</td>
+                    <td>Upgrade compatibility</td>
+                </tr>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68885" class="jira-link"><span class="badge badge-new">New</span> CNV-68885</a></td>
+                    <td>Test plans in Polarion</td>
+                    <td>QE test planning</td>
+                </tr>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68886" class="jira-link"><span class="badge badge-new">New</span> CNV-68886</a></td>
+                    <td>Automated tests</td>
+                    <td>Test automation</td>
+                </tr>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68887" class="jira-link"><span class="badge badge-new">New</span> CNV-68887</a></td>
+                    <td>Downstream documentation merged</td>
+                    <td>Documentation</td>
+                </tr>
+                <tr>
+                    <td><a href="https://issues.redhat.com/browse/CNV-68888" class="jira-link"><span class="badge badge-new">New</span> CNV-68888</a></td>
+                    <td>CNV QE DevOps Requirement/Enablement</td>
+                    <td>DevOps enablement</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>CNV-68880 Linked Issues</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Relationship</th>
+                    <th>Jira Key</th>
+                    <th>Summary</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Blocked by CNV-68880</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-69877" class="jira-link">CNV-69877</a></td>
+                    <td>CI to run tier2 tests subset on new PRs</td>
+                    <td><span class="badge badge-new">New</span></td>
+                </tr>
+                <tr>
+                    <td>Cloned from</td>
+                    <td><a href="https://issues.redhat.com/browse/CNV-62488" class="jira-link">CNV-62488</a></td>
+                    <td>Phase 1 - Meaningful CI for openshift-virtualization-tests</td>
+                    <td><span class="badge badge-closed">Closed</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- CLI Entry Points -->
+    <section class="section" id="cli-entry-points">
+        <h2>CLI Entry Points</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Command</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>quarantine-dashboard</code></td>
+                    <td>HTML/JSON dashboard generator. Flags: <code>--with-reportportal</code>, <code>--flaky-threshold</code>, <code>--reportportal-url</code>, <code>--reportportal-token</code>, <code>--reportportal-project</code>, <code>--json</code>, <code>--repo</code></td>
+                </tr>
+                <tr>
+                    <td><code>flaky-test-analyzer</code></td>
+                    <td>Flaky test analyzer with ReportPortal integration. Flags: <code>--threshold</code>, <code>--days</code>, <code>--branch</code>, <code>--output</code>, <code>--check-quarantined</code>, <code>--health-check</code></td>
+                </tr>
+                <tr>
+                    <td><code>quarantine-helper</code></td>
+                    <td>Quarantine marker management. Subcommands: <code>suggest</code>, <code>apply</code>, <code>remove</code>, <code>status</code></td>
+                </tr>
+                <tr>
+                    <td><code>quarantine-metrics</code></td>
+                    <td>Prometheus metrics exporter. Flags: <code>--branch</code>, <code>--output-file</code>, <code>--push-gateway</code>, <code>--include-flaky</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Module Index -->
+    <section class="section" id="module-index">
+        <h2>Module Index</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>quarantine_tools/dashboard.py</code></td>
+                    <td>Multi-repo HTML dashboard generator with ReportPortal integration</td>
+                </tr>
+                <tr>
+                    <td><code>quarantine_tools/reportportal_client.py</code></td>
+                    <td>ReportPortal REST API client (launches, test items, flaky detection)</td>
+                </tr>
+                <tr>
+                    <td><code>quarantine_tools/analyzer.py</code></td>
+                    <td>Flaky test analyzer, cross-referencing, and quarantine health checks</td>
+                </tr>
+                <tr>
+                    <td><code>quarantine_tools/quarantine_jira.py</code></td>
+                    <td>Jira ticket creation and status queries for quarantined tests</td>
+                </tr>
+                <tr>
+                    <td><code>quarantine_tools/metrics.py</code></td>
+                    <td>Prometheus metrics collection and exposition</td>
+                </tr>
+                <tr>
+                    <td><code>quarantine_tools/helper.py</code></td>
+                    <td>CLI for applying/removing quarantine markers on test files</td>
+                </tr>
+                <tr>
+                    <td><code>quarantine_tools/constants.py</code></td>
+                    <td>Shared constants (QUARANTINED marker string)</td>
+                </tr>
+                <tr>
+                    <td><code>quarantine_tools/exceptions.py</code></td>
+                    <td>Custom exception classes</td>
+                </tr>
+                <tr>
+                    <td><code>.github/workflows/quarantine-review.yml</code></td>
+                    <td>Biweekly review workflow (1st and 15th of each month)</td>
+                </tr>
+                <tr>
+                    <td><code>.github/workflows/quarantine-recommender.yml</code></td>
+                    <td>Daily flaky test analysis and candidate detection</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Footer -->
+    <div class="footer">
+        Generated on 2026-03-01 | openshift-virtualization-tests-quarantine-tools
+    </div>
+
+</div>
+
+<script>
+// Copy button functionality
+function copyCode(btn) {
+    const codeBlock = btn.parentElement.querySelector('.code-block');
+    const text = codeBlock.textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(function() {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copied');
+        }, 2000);
+    }, function() {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            btn.textContent = 'Copied';
+            btn.classList.add('copied');
+            setTimeout(function() {
+                btn.textContent = 'Copy';
+                btn.classList.remove('copied');
+            }, 2000);
+        } catch (e) {
+            btn.textContent = 'Failed';
+            setTimeout(function() {
+                btn.textContent = 'Copy';
+            }, 2000);
+        }
+        document.body.removeChild(textarea);
+    });
+}
+
+// Sidebar active state tracking on scroll
+(function() {
+    var links = document.querySelectorAll('.sidebar a[href^="#"]');
+    var sections = [];
+    links.forEach(function(link) {
+        var id = link.getAttribute('href').substring(1);
+        var el = document.getElementById(id);
+        if (el) sections.push({ link: link, el: el });
+    });
+
+    function updateActive() {
+        var scrollY = window.scrollY + 80;
+        var active = null;
+        for (var i = sections.length - 1; i >= 0; i--) {
+            if (sections[i].el.offsetTop <= scrollY) {
+                active = sections[i];
+                break;
+            }
+        }
+        links.forEach(function(l) { l.classList.remove('active'); });
+        if (active) active.link.classList.add('active');
+    }
+
+    window.addEventListener('scroll', updateActive, { passive: true });
+    updateActive();
+})();
+
+// Close sidebar on mobile when a link is clicked
+document.querySelectorAll('.sidebar a').forEach(function(link) {
+    link.addEventListener('click', function() {
+        if (window.innerWidth <= 900) {
+            document.querySelector('.sidebar').classList.remove('open');
+        }
+    });
+});
+</script>
+
+</body>
+</html>

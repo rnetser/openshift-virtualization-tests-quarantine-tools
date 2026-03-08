@@ -43,26 +43,49 @@ quarantine-helper apply tests/virt/test_example.py::test_func --jira CNV-12345
 quarantine-helper remove tests/virt/test_example.py::test_func
 quarantine-helper status
 
-# Generate quarantine dashboard
+# Generate quarantine dashboard (scans default repos)
 quarantine-dashboard
+
+# Scan a specific repo
+quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests
+
+# Scan multiple repos
+quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests --repo RedHatQE/cnv-tests
+
+# Include ReportPortal flaky test data
+quarantine-dashboard --with-reportportal --flaky-threshold 0.1
+
+# Pass ReportPortal credentials via CLI (alternative to env vars)
+quarantine-dashboard --with-reportportal \
+  --reportportal-url https://reportportal.example.com \
+  --reportportal-token <token> \
+  --reportportal-project <project>
+
+# Output as JSON
 quarantine-dashboard --json
-quarantine-dashboard --with-reportportal
+
+# Keep cloned repos for other tools to use
+quarantine-dashboard --keep-clones
 
 # Export Prometheus metrics
-quarantine-metrics --branch main
+quarantine-metrics --repo-path /path/to/test-repo --branch main
+quarantine-metrics --repo-path /path/to/test-repo --branch cnv-4.21 --include-flaky
 quarantine-metrics --push-gateway http://pushgateway:9091
 ```
 
+**Note:** `quarantine-dashboard` uses `--repo ORG/NAME` to clone remote repositories. Other tools (`flaky-test-analyzer`, `quarantine-metrics`) use `--repo-path` for local paths. Run `quarantine-dashboard --keep-clones` to create local clones at `/tmp/quarantine-stats/` for use with the other tools.
+
 ## Configuration
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `REPORTPORTAL_URL` | ReportPortal server URL | — |
-| `REPORTPORTAL_TOKEN` | ReportPortal API token | — |
-| `REPORTPORTAL_PROJECT` | ReportPortal project name | — |
-| `JIRA_TOKEN` | Jira API token | Falls back to `PYTEST_JIRA_TOKEN` |
-| `JIRA_SERVER` | Jira server URL | `https://issues.redhat.com` |
-| `JIRA_PROJECT` | Jira project key | `CNV` |
+| Variable | CLI Flag | Description | Default |
+|----------|----------|-------------|---------|
+| `REPORTPORTAL_URL` | `--reportportal-url` | ReportPortal server URL | — |
+| `REPORTPORTAL_TOKEN` | `--reportportal-token` | ReportPortal API token | — |
+| `REPORTPORTAL_PROJECT` | `--reportportal-project` | ReportPortal project name | — |
+| `JIRA_TOKEN` | — | Jira API token | Falls back to `PYTEST_JIRA_TOKEN` |
+| `JIRA_SERVER` | — | Jira server URL | `https://issues.redhat.com` |
+| `JIRA_PROJECT` | — | Jira project key | `CNV` |
+| `GITHUB_TOKEN` | `--github-token` | GitHub token for private repos | — |
 
 ## Documentation
 

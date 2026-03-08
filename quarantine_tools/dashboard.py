@@ -4,9 +4,11 @@ Part of the quarantine_tools package -- a standalone tool for scanning
 OpenShift Virtualization test repositories for quarantined tests and generating
 an HTML dashboard or JSON output with statistics per version and team.
 
-Repositories:
+Default repositories:
     - RedHatQE/openshift-virtualization-tests
     - RedHatQE/cnv-tests
+
+Use --repo to override the default list with custom repositories.
 
 Output:
     - CLI: Summary tables showing quarantine stats by version and team
@@ -35,12 +37,14 @@ from typing import ClassVar, NamedTuple
 from pyhelper_utils.shell import run_command
 from simple_logger.logger import get_logger
 
+from quarantine_tools.reportportal_client import FlakyTestInfo, ReportPortalClient
+
 LOGGER = get_logger(name=__name__)
 
 # Pattern to match valid CNV version branches (e.g., cnv-4.15, cnv-5.0)
 CNV_BRANCH_PATTERN: Pattern[str] = re_compile(pattern=r"^cnv-\d+\.\d+$")
 
-# Repositories to scan (hardcoded)
+# Default repositories to scan (can be overridden via --repo CLI argument)
 REPOS = [
     "RedHatQE/openshift-virtualization-tests",
     "RedHatQE/cnv-tests",
@@ -68,6 +72,62 @@ REPO_FOLDER_MAPPINGS: dict[str, dict[str, str]] = {
 
 # Working directory for cloned repos (hardcoded)
 WORKDIR = Path(gettempdir()) / "quarantine-stats"
+
+
+def _create_reportportal_client(
+    *,
+    reportportal_url: str | None = None,
+    reportportal_token: str | None = None,
+    reportportal_project: str | None = None,
+) -> ReportPortalClient | None:
+    """Create a ReportPortal client from CLI arguments or environment variables.
+
+    CLI arguments take precedence over environment variables.
+    Returns None if required configuration is missing.
+
+    Args:
+        reportportal_url: Optional URL override (falls back to REPORTPORTAL_URL env var).
+        reportportal_token: Optional token override (falls back to REPORTPORTAL_TOKEN env var).
+        reportportal_project: Optional project override (falls back to REPORTPORTAL_PROJECT env var).
+
+    Returns:
+        Configured ReportPortalClient instance, or None if configuration is incomplete.
+
+    """
+    url = reportportal_url or environ.get("REPORTPORTAL_URL")
+    token = reportportal_token or environ.get("REPORTPORTAL_TOKEN")
+    project = reportportal_project or environ.get("REPORTPORTAL_PROJECT")
+
+    if not url or not token or not project:
+        missing: list[str] = []
+        if not url:
+            missing.append("REPORTPORTAL_URL")
+        if not token:
+            missing.append("REPORTPORTAL_TOKEN")
+        if not project:
+            missing.append("REPORTPORTAL_PROJECT")
+        LOGGER.warning(
+            "ReportPortal not configured. Missing: %s. "
+            "Set environment variables or use --reportportal-* flags.",
+            ", ".join(missing),
+        )
+        return None
+
+    return ReportPortalClient(url=url, token=token, project=project)
+
+
+def validate_repo_name(repo: str) -> bool:
+    """Validate repository name is in 'org/name' format.
+
+    Args:
+        repo: Repository name to validate (e.g., 'RedHatQE/openshift-virtualization-tests').
+
+    Returns:
+        True if the repository name is valid (contains exactly one '/' with non-empty parts).
+
+    """
+    parts = repo.split("/")
+    return len(parts) == 2 and all(part.strip() for part in parts)
 
 
 def is_valid_branch(branch: str) -> bool:
@@ -245,6 +305,8 @@ def scan_branch(
     original_branch: str | None = None,
     cwd: Path | None = None,
     repo: str | None = None,
+    flaky_threshold: float = 0.0,
+    flaky_lookup: dict[str, float] | None = None,
 ) -> DashboardStats | None:
     """Checkout branch and scan its tests.
 
@@ -255,6 +317,8 @@ def scan_branch(
             If None, does not restore to original branch after scanning.
         cwd: Working directory for git commands. Defaults to current directory.
         repo: Repository name in "owner/name" format for repo-specific configs.
+        flaky_threshold: Failure rate threshold (0.0-1.0) for flaky detection.
+        flaky_lookup: Dict mapping test name to failure rate from ReportPortal.
 
     Returns:
         DashboardStats for the branch, or None if scanning failed.
@@ -262,8 +326,11 @@ def scan_branch(
     """
     try:
         checkout_branch(branch=branch, cwd=cwd)
-        scanner = TestScanner(tests_dir=tests_dir, repo=repo)
-        stats = scanner.scan_all_tests()
+        scanner = TestScanner(tests_dir=tests_dir, repo=repo, repo_dir=cwd)
+        stats = scanner.scan_all_tests(
+            flaky_threshold=flaky_threshold,
+            flaky_lookup=flaky_lookup,
+        )
         return stats
     except RuntimeError as error:
         LOGGER.warning("Failed to scan branch '%s': %s", branch, error)
@@ -512,13 +579,21 @@ def get_repo_branches(repo_dir: Path) -> list[str]:
     return get_valid_branches(cwd=repo_dir)
 
 
-def scan_repo_branch(repo_dir: Path, branch: str, repo: str | None = None) -> DashboardStats | None:
+def scan_repo_branch(
+    repo_dir: Path,
+    branch: str,
+    repo: str | None = None,
+    flaky_threshold: float = 0.0,
+    flaky_lookup: dict[str, float] | None = None,
+) -> DashboardStats | None:
     """Checkout branch in repository and scan its tests.
 
     Args:
         repo_dir: Path to the cloned repository.
         branch: Branch name to checkout and scan.
         repo: Repository name in "owner/name" format for repo-specific configs.
+        flaky_threshold: Failure rate threshold (0.0-1.0) for flaky detection.
+        flaky_lookup: Dict mapping test name to failure rate from ReportPortal.
 
     Returns:
         DashboardStats for the branch, or None if scanning failed.
@@ -529,7 +604,67 @@ def scan_repo_branch(repo_dir: Path, branch: str, repo: str | None = None) -> Da
         LOGGER.warning("tests/ directory not found in %s", repo_dir)
         return None
 
-    return scan_branch(branch=branch, tests_dir=tests_dir, cwd=repo_dir, repo=repo)
+    return scan_branch(
+        branch=branch,
+        tests_dir=tests_dir,
+        cwd=repo_dir,
+        repo=repo,
+        flaky_threshold=flaky_threshold,
+        flaky_lookup=flaky_lookup,
+    )
+
+
+def _build_flaky_lookup(client: ReportPortalClient, branch: str) -> dict[str, float] | None:
+    """Fetch flaky test data from ReportPortal and build a name-to-failure-rate lookup.
+
+    Calls the ReportPortal API once per branch to get all flaky tests, then
+    normalizes test names by extracting the last ``::``-separated segment
+    (the bare function name) so that it matches ``TestInfo.name``.
+
+    ReportPortal launches are filtered by name (e.g., launch names containing
+    ``"cnv-4.18"``). The ``main`` branch is skipped because its corresponding
+    RP launch version cannot be determined automatically.
+
+    Args:
+        client: An active ReportPortal client.
+        branch: Branch name to filter launches by (e.g., ``"cnv-4.18"``).
+
+    Returns:
+        Dict mapping test function name to its failure rate (0.0-1.0),
+        or None if the API call fails or the branch is not mappable.
+
+    """
+    if branch == "main":
+        LOGGER.info("ReportPortal: skipping 'main' branch (cannot determine RP launch version)")
+        return None
+
+    try:
+        flaky_tests: list[FlakyTestInfo] = client.get_flaky_tests(
+            threshold=1, days=30, launch_name_contains=branch,
+        )
+        lookup: dict[str, float] = {}
+        for info in flaky_tests:
+            short_name = info.test_name.split("::")[-1]
+            if short_name in lookup:
+                lookup[short_name] = max(lookup[short_name], info.failure_rate)
+                LOGGER.debug(
+                    "Duplicate test name '%s' in flaky lookup; keeping higher failure rate",
+                    short_name,
+                )
+            else:
+                lookup[short_name] = info.failure_rate
+        LOGGER.info(
+            "ReportPortal: %d flaky tests found for branch '%s'",
+            len(lookup), branch,
+        )
+        return lookup
+    except Exception:
+        LOGGER.warning(
+            "Failed to fetch flaky test data for branch '%s'",
+            branch,
+            exc_info=True,
+        )
+        return None
 
 
 def scan_all_repos(
@@ -537,6 +672,8 @@ def scan_all_repos(
     workdir: Path,
     branch_filter: str | None = None,
     github_token: str | None = None,
+    rp_client: ReportPortalClient | None = None,
+    flaky_threshold: float = 0.0,
 ) -> dict[str, list[VersionStats]]:
     """Scan all repositories and branches, returning per-version stats.
 
@@ -545,6 +682,8 @@ def scan_all_repos(
         workdir: Working directory to clone repos into.
         branch_filter: If specified, only scan this specific branch.
         github_token: Optional GitHub personal access token for cloning private repos.
+        rp_client: Optional ReportPortal client for fetching flaky test data.
+        flaky_threshold: Failure rate threshold (0.0-1.0) for flaky detection.
 
     Returns:
         Dict mapping repository name to list of VersionStats for each branch.
@@ -587,7 +726,19 @@ def scan_all_repos(
 
         for branch in branches:
             LOGGER.info("Scanning branch: %s...", branch)
-            stats = scan_repo_branch(repo_dir=repo_dir, branch=branch, repo=repo)
+
+            # Build flaky lookup from ReportPortal if client is available
+            flaky_lookup: dict[str, float] | None = None
+            if rp_client is not None:
+                flaky_lookup = _build_flaky_lookup(client=rp_client, branch=branch)
+
+            stats = scan_repo_branch(
+                repo_dir=repo_dir,
+                branch=branch,
+                repo=repo,
+                flaky_threshold=flaky_threshold,
+                flaky_lookup=flaky_lookup,
+            )
             if stats:
                 repo_stats.append(VersionStats(branch=branch, stats=stats))
                 LOGGER.info("  -> %d tests, %d quarantined", stats.total_tests, stats.quarantined_tests)
@@ -721,17 +872,20 @@ class TestScanner:
     # Maximum number of lines to search backwards for decorators
     MAX_DECORATOR_SEARCH_LINES: ClassVar[int] = 50
 
-    def __init__(self, tests_dir: Path, repo: str | None = None) -> None:
+    def __init__(self, tests_dir: Path, repo: str | None = None, repo_dir: Path | None = None) -> None:
         """Initialize the scanner.
 
         Args:
             tests_dir: Path to the tests/ directory to scan.
             repo: Repository name in "owner/name" format. Used for repo-specific
                 configurations. If None, uses default configurations.
+            repo_dir: Path to the repository root directory. Used as working directory
+                for git commands. If None, uses tests_dir parent.
 
         """
         self.tests_dir = tests_dir
         self.repo = repo
+        self.repo_dir = (repo_dir or tests_dir.parent).resolve()
 
         # Merge default and repo-specific configurations
         self.excluded_folders = self.DEFAULT_EXCLUDED_FOLDERS.copy()
@@ -763,7 +917,11 @@ class TestScanner:
         ]
         self.jira_pattern: Pattern[str] = re_compile(pattern=r"CNV-\d+")
 
-    def scan_all_tests(self, flaky_threshold: float = 0.0) -> DashboardStats:
+    def scan_all_tests(
+        self,
+        flaky_threshold: float = 0.0,
+        flaky_lookup: dict[str, float] | None = None,
+    ) -> DashboardStats:
         """Scan all test files and return aggregated statistics.
 
         Recursively finds all test_*.py files under the tests directory,
@@ -773,6 +931,9 @@ class TestScanner:
         Args:
             flaky_threshold: Failure rate threshold (0.0 to 1.0) above which a non-quarantined
                 test is considered a flaky candidate. Defaults to 0.0 (no flaky detection).
+            flaky_lookup: Optional mapping of test function names to ReportPortal failure rates
+                (0.0 to 1.0). When provided, enriches each test's ``failure_rate`` field before
+                calculating statistics. Defaults to None (no enrichment).
 
         Returns:
             DashboardStats containing total counts, category breakdown,
@@ -789,6 +950,14 @@ class TestScanner:
                 all_tests.extend(tests)
             except (SyntaxError, OSError, UnicodeDecodeError) as error:
                 LOGGER.warning("Error scanning %s: %s", test_file, error)
+
+        # Enrich tests with ReportPortal failure rates
+        if flaky_lookup:
+            all_tests = [
+                test._replace(failure_rate=flaky_lookup[test.name])
+                if test.name in flaky_lookup else test
+                for test in all_tests
+            ]
 
         return self._calculate_stats(all_tests=all_tests, flaky_threshold=flaky_threshold)
 
@@ -887,6 +1056,7 @@ class TestScanner:
             command=["git", "log", "--all", "-1", "--format=%aI", "-S", "QUARANTINED", "--", str(file_path)],
             check=False,
             verify_stderr=False,
+            cwd=self.repo_dir,
         )
         if not success or not stdout.strip():
             LOGGER.warning("Could not determine quarantine age for %s: %s", file_path, stderr)
@@ -2002,12 +2172,18 @@ def parse_args() -> Namespace:
         description="Tier2 Quarantine Status Dashboard Generator",
         formatter_class=RawDescriptionHelpFormatter,
         epilog="""
-Scans both repositories (RedHatQE/openshift-virtualization-tests, RedHatQE/cnv-tests)
-across all valid branches (main and cnv-X.Y versions).
+Scans repositories across all valid branches (main and cnv-X.Y versions).
+Uses built-in repo list by default, or specify repos with --repo.
 
 Examples:
-    # Scan both repos, all versions (default behavior)
+    # Scan default repos, all versions (default behavior)
     quarantine-dashboard
+
+    # Scan a single specific repo
+    quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests
+
+    # Scan multiple specific repos
+    quarantine-dashboard --repo RedHatQE/openshift-virtualization-tests --repo RedHatQE/cnv-tests
 
     # Keep cloned repos after completion
     quarantine-dashboard --keep-clones
@@ -2055,40 +2231,109 @@ Examples:
         default=False,
         help="Include ReportPortal data (failure rates, flaky test candidates). Requires REPORTPORTAL_* env vars.",
     )
+    parser.add_argument(
+        "--flaky-threshold",
+        type=float,
+        default=0.15,
+        help="Failure rate threshold (0.0-1.0) for flaky detection (default: 0.15). "
+        "Tests with failure rates at or above this value are flagged as flaky candidates. "
+        "Only used when --with-reportportal is enabled.",
+    )
+    parser.add_argument(
+        "--reportportal-url",
+        type=str,
+        default=None,
+        help="ReportPortal server URL. Falls back to REPORTPORTAL_URL env var.",
+    )
+    parser.add_argument(
+        "--reportportal-token",
+        type=str,
+        default=None,
+        help="ReportPortal API token. Falls back to REPORTPORTAL_TOKEN env var.",
+    )
+    parser.add_argument(
+        "--reportportal-project",
+        type=str,
+        default=None,
+        help="ReportPortal project name. Falls back to REPORTPORTAL_PROJECT env var.",
+    )
+    parser.add_argument(
+        "--repo",
+        type=str,
+        action="append",
+        dest="repos",
+        metavar="ORG/NAME",
+        help="Repository to scan (e.g., RedHatQE/openshift-virtualization-tests). "
+        "Can be repeated. Defaults to built-in list if not provided.",
+    )
     return parser.parse_args()
 
 
 def run_multi_repo_mode(
     *,
+    repos: list[str],
     keep_clones: bool,
     output_file: Path,
     json_output: bool = False,
     workdir: Path = WORKDIR,
     github_token: str | None = None,
     with_reportportal: bool = False,
+    flaky_threshold: float = 0.15,
+    reportportal_url: str | None = None,
+    reportportal_token: str | None = None,
+    reportportal_project: str | None = None,
 ) -> int:
     """Run dashboard generator in multi-repository mode.
 
     Clones repositories, scans all branches, and generates a combined dashboard or JSON output.
 
     Args:
+        repos: List of repository names to scan (e.g., ['RedHatQE/openshift-virtualization-tests']).
         keep_clones: Whether to keep cloned repositories after completion.
         output_file: Path to write the dashboard HTML file (ignored if json_output is True).
         json_output: If True, output JSON to stdout instead of generating HTML dashboard.
         workdir: Directory to clone repos into.
         github_token: Optional GitHub personal access token for cloning private repos.
         with_reportportal: Whether to include ReportPortal data for failure rates and flaky detection.
+        flaky_threshold: Failure rate threshold (0.0-1.0) for flaky detection (default: 0.15).
+        reportportal_url: Optional ReportPortal server URL (falls back to REPORTPORTAL_URL env var).
+        reportportal_token: Optional ReportPortal API token (falls back to REPORTPORTAL_TOKEN env var).
+        reportportal_project: Optional ReportPortal project name (falls back to REPORTPORTAL_PROJECT env var).
 
     Returns:
         Exit code: 0 on success, 1 on error.
 
     """
     LOGGER.info("Mode: Multi-Repository (all versions)")
-    LOGGER.info("Repositories: %s", ", ".join(REPOS))
+    LOGGER.info("Repositories: %s", ", ".join(repos))
     LOGGER.info("Working directory: %s", workdir)
 
-    # Scan all repos and all branches
-    repo_stats = scan_all_repos(repos=REPOS, workdir=workdir, branch_filter=None, github_token=github_token)
+    # Create ReportPortal client if enabled
+    rp_client: ReportPortalClient | None = None
+    if with_reportportal:
+        rp_client = _create_reportportal_client(
+            reportportal_url=reportportal_url,
+            reportportal_token=reportportal_token,
+            reportportal_project=reportportal_project,
+        )
+        if rp_client:
+            LOGGER.info("ReportPortal integration enabled (threshold=%.2f)", flaky_threshold)
+        else:
+            LOGGER.warning("ReportPortal requested but not configured — continuing without flaky data")
+
+    try:
+        # Scan all repos and all branches
+        repo_stats = scan_all_repos(
+            repos=repos,
+            workdir=workdir,
+            branch_filter=None,
+            github_token=github_token,
+            rp_client=rp_client,
+            flaky_threshold=flaky_threshold,
+        )
+    finally:
+        if rp_client is not None:
+            rp_client.close()
 
     if not repo_stats:
         LOGGER.error("No repositories could be scanned.")
@@ -2154,14 +2399,24 @@ def run_multi_repo_mode(
 def main() -> int:
     """Main entry point for the dashboard generator.
 
-    Scans both repositories across all valid branches (main and cnv-X.Y),
+    Scans repositories across all valid branches (main and cnv-X.Y),
     generates an HTML dashboard or JSON output, and writes to the output directory.
+    Repositories can be specified via --repo or default to REPOS.
 
     Returns:
         Exit code: 0 on success, 1 on error.
 
     """
     args = parse_args()
+
+    # Resolve repositories: CLI --repo overrides built-in defaults
+    repos = args.repos if args.repos else REPOS
+    invalid_repos = [r for r in repos if not validate_repo_name(repo=r)]
+    if invalid_repos:
+        LOGGER.error("Invalid repository format (expected 'org/name'): %s", ", ".join(invalid_repos))
+        raise SystemExit(1)
+
+    repos = list(dict.fromkeys(repos))
 
     # Determine output file path based on format
     output_dir = args.output_dir or Path(__file__).parent
@@ -2177,12 +2432,17 @@ def main() -> int:
     LOGGER.info("=" * 60)
 
     return run_multi_repo_mode(
+        repos=repos,
         keep_clones=args.keep_clones,
         output_file=output_file,
         json_output=args.json_output,
         workdir=args.workdir,
         github_token=github_token,
         with_reportportal=args.with_reportportal,
+        flaky_threshold=args.flaky_threshold,
+        reportportal_url=args.reportportal_url,
+        reportportal_token=args.reportportal_token,
+        reportportal_project=args.reportportal_project,
     )
 
 

@@ -198,7 +198,11 @@ class ReportPortalClient:
         return outcomes
 
     def get_flaky_tests(
-        self, threshold: int = 3, days: int = 7, branch: str | None = None
+        self,
+        threshold: int = 3,
+        days: int = 7,
+        branch: str | None = None,
+        launch_name_contains: str | None = None,
     ) -> list[FlakyTestInfo]:
         """Find tests exceeding a failure threshold in the given time window.
 
@@ -209,14 +213,20 @@ class ReportPortalClient:
             threshold: Minimum number of failures to be considered flaky. Defaults to 3.
             days: Number of days to look back. Defaults to 7.
             branch: Optional branch name to filter launches by attribute.
+            launch_name_contains: Optional substring to filter launches by name.
 
         Returns:
             List of FlakyTestInfo sorted by failure_count descending.
         """
-        LOGGER.info(f"Searching for flaky tests (threshold={threshold}, days={days}, branch={branch})")
+        LOGGER.info(
+            f"Searching for flaky tests (threshold={threshold}, days={days}, "
+            f"branch={branch}, launch_name_contains={launch_name_contains})"
+        )
         since_date = _format_timestamp(timestamp=datetime.now(tz=UTC) - timedelta(days=days))
 
-        launch_ids = self._get_launch_ids(since_date=since_date, branch=branch)
+        launch_ids = self._get_launch_ids(
+            since_date=since_date, branch=branch, launch_name_contains=launch_name_contains,
+        )
         if not launch_ids:
             LOGGER.info("No launches found in the specified time window")
             return []
@@ -349,12 +359,19 @@ class ReportPortalClient:
 
         return all_items
 
-    def _get_launch_ids(self, since_date: str, branch: str | None = None) -> list[str]:
+    def _get_launch_ids(
+        self,
+        since_date: str,
+        branch: str | None = None,
+        launch_name_contains: str | None = None,
+    ) -> list[str]:
         """Retrieve launch IDs within a date range, optionally filtered by branch.
 
         Args:
             since_date: ISO-8601 start date filter.
             branch: Optional branch name to filter by launch attributes.
+            launch_name_contains: Optional substring to filter launches by name
+                (uses ReportPortal's ``filter.cnt.name`` operator).
 
         Returns:
             List of launch ID strings.
@@ -367,6 +384,10 @@ class ReportPortalClient:
         if branch:
             params["filter.has.compositeAttribute"] = f"branch:{branch}"
             LOGGER.info("Filtering launches by branch attribute: branch:%s", branch)
+
+        if launch_name_contains:
+            params["filter.cnt.name"] = launch_name_contains
+            LOGGER.info("Filtering launches by name containing: %s", launch_name_contains)
 
         LOGGER.info("Launch query params: %s", params)
         LOGGER.debug("Full API URL: %s/%s", self._base_url, "launch")
@@ -405,12 +426,20 @@ class ReportPortalClient:
         LOGGER.info(f"Found {len(all_launch_ids)} launches since {since_date}")
 
         # Diagnostic fallback: if branch filter returned 0 results, query without it to compare
-        if not all_launch_ids and branch:
+        if not all_launch_ids and (branch or launch_name_contains):
+            filter_desc = []
+            if branch:
+                filter_desc.append(f"branch:{branch}")
+            if launch_name_contains:
+                filter_desc.append(f"name contains '{launch_name_contains}'")
             LOGGER.warning(
-                "No launches found with branch filter 'branch:%s'. Trying without filter to diagnose...",
-                branch,
+                "No launches found with filter(s): %s. Trying without filter to diagnose...",
+                ", ".join(filter_desc),
             )
-            debug_params = {key: value for key, value in params.items() if "Attribute" not in key}
+            debug_params = {
+                key: value for key, value in params.items()
+                if "Attribute" not in key and key != "filter.cnt.name"
+            }
             debug_response = self._make_request(
                 method="GET", endpoint="launch", params={**debug_params, "page.size": "5"}
             )
@@ -577,6 +606,7 @@ def get_flaky_tests(
     threshold: int = 3,
     days: int = 7,
     branch: str | None = None,
+    launch_name_contains: str | None = None,
     verify_ssl: bool | str | None = None,
 ) -> list[FlakyTestInfo]:
     """Convenience function using env var configuration.
@@ -588,6 +618,7 @@ def get_flaky_tests(
         threshold: Minimum number of failures to be considered flaky. Defaults to 3.
         days: Number of days to look back. Defaults to 7.
         branch: Optional branch name to filter launches by attribute.
+        launch_name_contains: Optional substring to filter launches by name.
         verify_ssl: Whether to verify SSL certificates. Falls back to
             REPORTPORTAL_VERIFY_SSL env var (default: false). Can also be
             a string path to a CA bundle file.
@@ -599,4 +630,7 @@ def get_flaky_tests(
         MissingEnvironmentVariableError: If required environment variables are not set.
     """
     with ReportPortalClient(verify_ssl=verify_ssl) as client:
-        return client.get_flaky_tests(threshold=threshold, days=days, branch=branch)
+        return client.get_flaky_tests(
+            threshold=threshold, days=days, branch=branch,
+            launch_name_contains=launch_name_contains,
+        )
